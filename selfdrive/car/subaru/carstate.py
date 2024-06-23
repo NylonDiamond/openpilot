@@ -156,6 +156,7 @@ class CarState(CarStateBase):
   def get_can_parser(CP):
     signals = [
       # sig_name, sig_address
+      ("Steer_Torque_Sensor", "Steering"),
       ("Steer_Torque_Sensor", "Steering_Torque"),
       ("Steer_Torque_Output", "Steering_Torque"),
       ("Steering_Angle", "Steering_Torque"),
@@ -179,7 +180,6 @@ class CarState(CarStateBase):
       ("Brake_Pedal", 50),
       ("Transmission", 100),
       ("Steering_Torque", 50),
-      ("Steering", 100),
       ("BodyInfo", 1),
     ]
 
