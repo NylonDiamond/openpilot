@@ -17,6 +17,9 @@ from openpilot.selfdrive.modeld.helpers import usbgpu_compiled
 BACKLIGHT_OFFROAD = 65 if HARDWARE.get_device_type() == "mici" else 50
 PARAM_UPDATE_TIME = 1 / 5.0
 
+# screen brightness options, 0 selects the automatic behavior
+BRIGHTNESS_LEVELS = (0, 25, 50, 75, 100)
+
 
 class UIStatus(Enum):
   DISENGAGED = "disengaged"
@@ -225,7 +228,9 @@ class Device:
     self._prev_timed_out = False
     self._awake: bool = True
 
+    self._params = Params()
     self._offroad_brightness: int = BACKLIGHT_OFFROAD
+    self._brightness_level: int = self._params.get("BrightnessLevel", return_default=True)
     self._last_brightness: int = 0
     self._brightness_filter = FirstOrderFilter(BACKLIGHT_OFFROAD, 10.00, 1 / gui_app.target_fps)
     self._brightness_thread: threading.Thread | None = None
@@ -282,8 +287,16 @@ class Device:
       brightness = BACKLIGHT_OFFROAD
     self._offroad_brightness = min(max(brightness, 0), 100)
 
-  def _update_brightness(self):
-    clipped_brightness = self._offroad_brightness
+  def set_brightness_level(self, level: int):
+    # 0 restores the automatic behavior, any other value is a fixed percentage
+    self._brightness_level = level
+    self._brightness_filter.x = self._target_brightness()  # skip the ramp so the new setting is visible right away
+
+  def _target_brightness(self) -> float:
+    if self._brightness_level:
+      return float(self._brightness_level)
+
+    clipped_brightness = float(self._offroad_brightness)
 
     if ui_state.started and ui_state.light_sensor >= 0:
       clipped_brightness = ui_state.light_sensor
@@ -296,7 +309,10 @@ class Device:
 
       clipped_brightness = float(np.interp(clipped_brightness, [0, 1], [30, 100]))
 
-    brightness = round(self._brightness_filter.update(clipped_brightness))
+    return clipped_brightness
+
+  def _update_brightness(self):
+    brightness = round(self._brightness_filter.update(self._target_brightness()))
     if not self._awake:
       brightness = 0
 
