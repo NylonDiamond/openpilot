@@ -511,8 +511,18 @@ class SelfdriveD:
     if not self.enabled:
       self.mismatch_counter = 0
 
+    # under MADS a driver brake press drops controls_allowed on the panda by design, so that
+    # braking can never authorize a longitudinal command, while steering carries on its own
+    # flag. openpilot stays enabled throughout, so this window is expected rather than a
+    # mismatch. the counter is cleared rather than merely held, because it never decays on
+    # its own and a sample of socket skew on each press would otherwise reach 200 over a
+    # drive and immediate-disable a healthy car.
+    mads_braking = self.mads_enabled and (CS.brakePressed or CS.regenBraking)
+
     # All pandas not in silent mode must have controlsAllowed when openpilot is enabled
-    if self.enabled and any(not ps.controlsAllowed for ps in self.sm['pandaStates']
+    if mads_braking:
+      self.mismatch_counter = 0
+    elif self.enabled and any(not ps.controlsAllowed for ps in self.sm['pandaStates']
            if ps.safetyModel not in IGNORED_SAFETY_MODES):
       self.mismatch_counter += 1
 
