@@ -18,7 +18,7 @@ from opendbc.car.carlog import carlog
 from opendbc.car.fw_versions import ObdCallback
 from opendbc.car.car_helpers import get_car, interfaces
 from opendbc.car.interfaces import CarInterfaceBase, RadarInterfaceBase
-from opendbc.car.subaru.values import enable_mads as subaru_enable_mads
+from opendbc.car.subaru.values import enable_mads as subaru_enable_mads, enable_mads_main as subaru_enable_mads_main
 from openpilot.selfdrive.pandad import can_capnp_to_list, can_list_to_can_capnp
 from openpilot.selfdrive.car.cruise import VCruiseHelper
 
@@ -122,6 +122,10 @@ class Car:
     # allow, so it is applied here at car init and needs an onroad cycle to take effect
     if not self.CP.passive and self.CP.brand == 'subaru' and self.params.get_bool("MadsEnabled"):
       subaru_enable_mads(self.CP)
+      # arming off the cruise main switch rides on MADS, and the panda drops it without
+      # MADS anyway, so it is only ever set alongside it
+      if self.params.get_bool("MadsMainSwitch"):
+        subaru_enable_mads_main(self.CP)
 
     if self.CP.secOcRequired:
       # Copy user key if available
