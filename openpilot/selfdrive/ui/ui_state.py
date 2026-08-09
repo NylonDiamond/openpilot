@@ -90,6 +90,11 @@ class UIState:
     self.panda_type: log.PandaState.PandaType = log.PandaState.PandaType.unknown
     self.personality: log.LongitudinalPersonality = log.LongitudinalPersonality.standard
     self.has_longitudinal_control: bool = False
+    # onroad display settings. all three only do anything on a car without openpilot longitudinal,
+    # where the stock UI spends these channels on state that can never change.
+    self.show_lead_indicator: bool = self.params.get_bool("ShowLeadIndicator")
+    self.engagement_path_color: bool = self.params.get_bool("EngagementPathColor")
+    self.hide_experimental_button: bool = self.params.get_bool("HideExperimentalButton")
     self.is_body: bool | None = False
     self.CP: car.CarParams | None = None
     self.light_sensor: float = -1.0
@@ -211,6 +216,9 @@ class UIState:
     self.always_on_dm = self.params.get_bool("AlwaysOnDM")
     self.experimental_mode = self.params.get_bool("ExperimentalMode")
     self.experimental_mode_confirmed = self.params.get_bool("ExperimentalModeConfirmed")
+    self.show_lead_indicator = self.params.get_bool("ShowLeadIndicator")
+    self.engagement_path_color = self.params.get_bool("EngagementPathColor")
+    self.hide_experimental_button = self.params.get_bool("HideExperimentalButton")
     # keep usbgpu UI active until offroad transition when gpu disappears
     self.usbgpu = self.sm["deviceState"].chestnutPresent or (self.usbgpu and self.started)
     if not self.usbgpu_compiled:

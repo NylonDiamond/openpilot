@@ -117,12 +117,19 @@ class HudRenderer(Widget):
 
     self._draw_current_speed(rect)
 
-    button_x = rect.x + rect.width - UI_CONFIG.border_size - UI_CONFIG.button_size
-    button_y = rect.y + UI_CONFIG.border_size
-    self._exp_button.render(rl.Rectangle(button_x, button_y, UI_CONFIG.button_size, UI_CONFIG.button_size))
+    if not self._exp_button_hidden():
+      button_x = rect.x + rect.width - UI_CONFIG.border_size - UI_CONFIG.button_size
+      button_y = rect.y + UI_CONFIG.border_size
+      self._exp_button.render(rl.Rectangle(button_x, button_y, UI_CONFIG.button_size, UI_CONFIG.button_size))
+
+  @staticmethod
+  def _exp_button_hidden() -> bool:
+    # the button can only ever toggle on a car with openpilot longitudinal, so on this one it is
+    # a dead target that still swallows touches in that corner
+    return ui_state.hide_experimental_button and not ui_state.has_longitudinal_control
 
   def user_interacting(self) -> bool:
-    return self._exp_button.is_pressed
+    return not self._exp_button_hidden() and self._exp_button.is_pressed
 
   def _draw_set_speed(self, rect: rl.Rectangle) -> None:
     """Draw the MAX speed indicator box."""

@@ -14,6 +14,10 @@ PERSONALITY_TO_INT = log.LongitudinalPersonality.schema.enumerants
 # seconds to wait before starting a lane change without a nudge, 0 keeps the nudge required
 AUTO_LANE_CHANGE_TIMERS = (0, 1, 2, 3)
 
+# onroad display settings that reclaim parts of the UI the stock build only uses to report
+# longitudinal state. nothing for them to do on a car openpilot drives end to end.
+LATERAL_ONLY_DISPLAY_TOGGLES = ("ShowLeadIndicator", "EngagementPathColor", "HideExperimentalButton")
+
 # Description constants
 DESCRIPTIONS = {
   "OpenpilotEnabledToggle": tr_noop(
@@ -44,6 +48,21 @@ DESCRIPTIONS = {
     "Shifting into park runs the lever through reverse on the way, and openpilot acts on that the instant it sees it, " +
     "so a take control alert fires while steering is still on. This makes it wait a tenth of a second first. " +
     "Genuinely selecting reverse is detected that much later."
+  ),
+  "ShowLeadIndicator": tr_noop(
+    "Mark the vehicle ahead on the driving screen. This car has no radar, so the marker follows the lead the driving model sees, " +
+    "which is the closest available read on what the stock system is reacting to. " +
+    "openpilot normally hides it unless it controls the gas and brake itself."
+  ),
+  "EngagementPathColor": tr_noop(
+    "Turn the driving path green while openpilot is steering and white while it is not. " +
+    "The path color normally tracks openpilot's use of the throttle, and the stock cruise owns that on this car, " +
+    "so without this the path stays green whether or not anything is steering."
+  ),
+  "HideExperimentalButton": tr_noop(
+    "Remove the steering wheel button from the top right of the driving screen. " +
+    "Experimental mode needs openpilot longitudinal control, which this car does not have, " +
+    "so the button cannot do anything and only blocks taps in that corner."
   ),
   "AlwaysOnDM": tr_noop("Enable driver monitoring even when openpilot is not engaged."),
   'RecordFront': tr_noop("Upload data from the cabin camera and help improve the driver monitoring algorithm."),
@@ -95,6 +114,24 @@ class TogglesLayout(Widget):
         lambda: tr("Enable Lane Departure Warnings"),
         DESCRIPTIONS["IsLdwEnabled"],
         "warning.png",
+        False,
+      ),
+      "ShowLeadIndicator": (
+        lambda: tr("Show Lead Car Marker"),
+        DESCRIPTIONS["ShowLeadIndicator"],
+        "triangle.png",
+        False,
+      ),
+      "EngagementPathColor": (
+        lambda: tr("Color Path By Steering"),
+        DESCRIPTIONS["EngagementPathColor"],
+        "road.png",
+        False,
+      ),
+      "HideExperimentalButton": (
+        lambda: tr("Hide Experimental Mode Button"),
+        DESCRIPTIONS["HideExperimentalButton"],
+        "experimental_grey.png",
         False,
       ),
       "AlwaysOnDM": (
@@ -236,6 +273,9 @@ class TogglesLayout(Widget):
             long_desc = tr("Enable the openpilot longitudinal control (alpha) toggle to allow Experimental mode.")
 
         self._toggles["ExperimentalMode"].set_description("<b>" + long_desc + "</b><br><br>" + e2e_description)
+
+      for param in LATERAL_ONLY_DISPLAY_TOGGLES:
+        self._toggles[param].action_item.set_enabled(not ui_state.has_longitudinal_control)
     else:
       self._toggles["ExperimentalMode"].set_description(e2e_description)
 
