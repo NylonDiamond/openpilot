@@ -12,6 +12,7 @@ from openpilot.common.swaglog import cloudlog
 
 from opendbc.car.car_helpers import interfaces
 from opendbc.car.vehicle_model import VehicleModel
+from openpilot.selfdrive.controls.lib.blinker_pause import BlinkerPause
 from openpilot.selfdrive.controls.lib.drive_helpers import clip_curvature
 from openpilot.selfdrive.controls.lib.latcontrol import LatControl
 from openpilot.selfdrive.controls.lib.latcontrol_pid import LatControlPID
@@ -50,6 +51,8 @@ class Controls:
     self.pose_calibrator = PoseCalibrator()
     self.calibrated_pose: Pose | None = None
 
+    self.blinker_pause = BlinkerPause()
+
     self.LoC = LongControl(self.CP)
     self.VM = VehicleModel(self.CP)
     self.LaC: LatControl
@@ -64,6 +67,9 @@ class Controls:
 
   def update(self):
     self.sm.update(15)
+    if self.sm.frame % int(1. / DT_CTRL) == 0:  # ~1Hz, this loop is too hot to read params every frame
+      self.blinker_pause.enabled = self.params.get_bool("BlinkerPause")
+      self.blinker_pause.resume_delay = self.params.get("BlinkerPauseDelay", return_default=True)
     if self.sm.updated["extrinsicsCalibration"]:
       self.pose_calibrator.feed_extrinsics_calibration(self.sm['extrinsicsCalibration'])
     if self.sm.updated["deviceMotion"]:
@@ -100,6 +106,11 @@ class Controls:
     CC.latActive = self.sm['selfdriveState'].active and not CS.steerFaultTemporary and not CS.steerFaultPermanent and \
                    (not standstill or self.CP.steerAtStandstill)
     CC.longActive = CC.enabled and not any(e.overrideLongitudinal for e in self.sm['onroadEvents']) and self.CP.openpilotLongitudinalControl
+
+    # let go of the wheel while the driver signals a turn openpilot was never going to make.
+    # hazards are both signals at once, which is not a turn signal.
+    one_blinker = CS.leftBlinker != CS.rightBlinker
+    CC.latActive = CC.latActive and not self.blinker_pause.update(CC.latActive, one_blinker, CS.vEgo)
 
     actuators = CC.actuators
     actuators.longControlState = self.LoC.long_control_state
