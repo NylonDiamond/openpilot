@@ -6,7 +6,7 @@ from openpilot.common.basedir import BASEDIR
 from openpilot.common.params import Params
 from openpilot.common.swaglog import cloudlog
 from openpilot.selfdrive.ui.onroad.cabin_camera_dialog import CabinCameraDialog
-from openpilot.selfdrive.ui.ui_state import ui_state
+from openpilot.selfdrive.ui.ui_state import BRIGHTNESS_LEVELS, device, ui_state
 from openpilot.selfdrive.ui.layouts.onboarding import TrainingGuide
 from openpilot.selfdrive.ui.widgets.pairing_dialog import PairingDialog
 from openpilot.system.ui.lib.application import FontWeight, gui_app
@@ -14,7 +14,7 @@ from openpilot.system.ui.lib.multilang import multilang, tr, tr_noop
 from openpilot.system.ui.widgets import Widget, DialogResult
 from openpilot.system.ui.widgets.confirm_dialog import ConfirmDialog, alert_dialog
 from openpilot.system.ui.widgets.html_render import HtmlModal
-from openpilot.system.ui.widgets.list_view import text_item, button_item, dual_button_item
+from openpilot.system.ui.widgets.list_view import text_item, button_item, dual_button_item, multiple_button_item
 from openpilot.system.ui.widgets.option_dialog import MultiOptionDialog
 from openpilot.system.ui.widgets.scroller_tici import Scroller
 
@@ -24,6 +24,7 @@ DESCRIPTIONS = {
   'cabin_camera': tr_noop("Preview the cabin camera to ensure that driver monitoring has good visibility. (vehicle must be off)"),
   'reset_calibration': tr_noop("openpilot requires the device to be mounted within 4° left or right and within 5° up or 9° down."),
   'review_guide': tr_noop("Review the rules, features, and limitations of openpilot"),
+  'brightness': tr_noop("Auto adjusts the screen to the ambient light while driving. Pick a percentage to hold the screen at a fixed brightness instead."),
 }
 
 
@@ -53,6 +54,16 @@ class DeviceLayout(Widget):
     self._power_off_btn = dual_button_item(lambda: tr("Reboot"), lambda: tr("Power Off"),
                                            left_callback=self._reboot_prompt, right_callback=self._power_off_prompt)
 
+    brightness_level = self._params.get("BrightnessLevel", return_default=True)
+    self._brightness_setting = multiple_button_item(
+      lambda: tr("Screen Brightness"),
+      lambda: tr(DESCRIPTIONS['brightness']),
+      buttons=[lambda: tr("Auto"), "25%", "50%", "75%", "100%"],
+      button_width=170,
+      callback=self._set_brightness_level,
+      selected_index=BRIGHTNESS_LEVELS.index(brightness_level) if brightness_level in BRIGHTNESS_LEVELS else 0,
+    )
+
     items = [
       text_item(lambda: tr("Dongle ID"), self._params.get("DongleId") or (lambda: tr("N/A"))),
       text_item(lambda: tr("Serial"), self._params.get("HardwareSerial") or (lambda: tr("N/A"))),
@@ -63,10 +74,16 @@ class DeviceLayout(Widget):
       button_item(lambda: tr("Review Training Guide"), lambda: tr("REVIEW"), lambda: tr(DESCRIPTIONS['review_guide']),
                   self._on_review_training_guide, enabled=ui_state.is_offroad),
       button_item(lambda: tr("Regulatory"), lambda: tr("VIEW"), callback=self._on_regulatory, enabled=ui_state.is_offroad),
+      self._brightness_setting,
       button_item(lambda: tr("Change Language"), lambda: tr("CHANGE"), callback=self._show_language_dialog),
       self._power_off_btn,
     ]
     return items
+
+  def _set_brightness_level(self, button_index: int):
+    level = BRIGHTNESS_LEVELS[button_index]
+    self._params.put("BrightnessLevel", level, block=True)
+    device.set_brightness_level(level)
 
   def _offroad_transition(self):
     self._power_off_btn.action_item.right_button.set_visible(ui_state.is_offroad())
