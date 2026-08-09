@@ -48,6 +48,10 @@ class ModelRenderer(Widget):
     self._longitudinal_control = False
     self._experimental_mode = False
     self._blend_filter = FirstOrderFilter(1.0, 0.25, 1 / gui_app.target_fps)
+    # the filter starts green, so a drive that begins not steering would fade from green to
+    # white over the first second. snap to the real value instead the first time we draw.
+    self._blend_snap = True
+    ui_state.add_offroad_transition_callback(self._snap_blend)
     self._prev_allow_throttle = True
     self._lane_line_probs = np.zeros(4, dtype=np.float32)
     self._road_edge_stds = np.zeros(2, dtype=np.float32)
@@ -278,6 +282,9 @@ class ModelRenderer(Widget):
       color = rl.Color(255, 0, 0, int(alpha * 255))
       draw_polygon(self._rect, road_edge.projected_points, color)
 
+  def _snap_blend(self) -> None:
+    self._blend_snap = True
+
   def _path_highlighted(self, sm) -> bool:
     """Whether the path draws in its highlight color rather than plain white.
 
@@ -299,7 +306,12 @@ class ModelRenderer(Widget):
     if not self._path.projected_points.size:
       return
 
-    self._blend_filter.update(int(self._path_highlighted(sm)))
+    highlighted = int(self._path_highlighted(sm))
+    if self._blend_snap:
+      self._blend_filter.x = float(highlighted)
+      self._blend_snap = False
+    else:
+      self._blend_filter.update(highlighted)
 
     if self._experimental_mode:
       # Draw with acceleration coloring
