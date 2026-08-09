@@ -106,6 +106,11 @@ class UIState:
     self.panda_type: log.PandaState.PandaType = log.PandaState.PandaType.unknown
     self.personality: log.LongitudinalPersonality = log.LongitudinalPersonality.standard
     self.has_longitudinal_control: bool = False
+    # onroad display settings. all three only do anything on a car without openpilot longitudinal,
+    # where the stock UI spends these channels on state that can never change.
+    self.show_lead_indicator: bool = self.params.get_bool("ShowLeadIndicator")
+    self.engagement_path_color: bool = self.params.get_bool("EngagementPathColor")
+    self.hide_experimental_button: bool = self.params.get_bool("HideExperimentalButton")
     self.is_body: bool | None = False
     self.CP: car.CarParams | None = None
     self.light_sensor: float = -1.0
@@ -251,6 +256,9 @@ class UIState:
     self.is_metric = self.params.get_bool("IsMetric")
     self.always_on_dm = self.params.get_bool("AlwaysOnDM")
     self.experimental_mode = self.params.get_bool("ExperimentalMode")
+    self.show_lead_indicator = self.params.get_bool("ShowLeadIndicator")
+    self.engagement_path_color = self.params.get_bool("EngagementPathColor")
+    self.hide_experimental_button = self.params.get_bool("HideExperimentalButton")
     self.chestnut_active = self.params.get("ChestnutActive")
     self.chestnut_loading = self.params.get_bool("ChestnutLoading")
     self.chestnut_alert = any(self.params.get(k) is not None for k, a in OFFROAD_ALERTS.items() if k.startswith("Offroad_Chestnut") and a["severity"] >= 0)

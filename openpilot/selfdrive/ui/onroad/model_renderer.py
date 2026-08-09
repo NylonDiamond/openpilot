@@ -106,7 +106,11 @@ class ModelRenderer(Widget):
     model = sm['modelV2']
     radar_state = sm['radarState'] if sm.valid['radarState'] else None
     lead_one = radar_state.leadOne if radar_state else None
-    render_lead_indicator = self._longitudinal_control and radar_state is not None
+    # without openpilot longitudinal the lead is still tracked, radard just derives it from
+    # modelV2.leadsV3 instead of a radar. worth drawing anyway: it shows what the stock ADAS
+    # is most likely following, and shows it dropping the lead before the car reacts.
+    show_lead = self._longitudinal_control or ui_state.show_lead_indicator
+    render_lead_indicator = show_lead and radar_state is not None
 
     # Update model data when needed
     model_updated = sm.updated['modelV2']
@@ -274,13 +278,28 @@ class ModelRenderer(Widget):
       color = rl.Color(255, 0, 0, int(alpha * 255))
       draw_polygon(self._rect, road_edge.projected_points, color)
 
+  def _path_highlighted(self, sm) -> bool:
+    """Whether the path draws in its highlight color rather than plain white.
+
+    Upstream this means "throttle is allowed". A car without openpilot longitudinal can never
+    disallow throttle, so that reduces to a constant True and the path is permanently green,
+    engaged or not. Where the driver has asked for it, spend the channel on lateral engagement
+    instead, which is the thing MADS makes ambiguous: green means openpilot is steering.
+    """
+    if self._longitudinal_control:
+      return sm['longitudinalPlan'].allowThrottle
+
+    if ui_state.engagement_path_color:
+      return sm['carControl'].latActive
+
+    return True
+
   def _draw_path(self, sm):
     """Draw path with dynamic coloring based on mode and throttle state."""
     if not self._path.projected_points.size:
       return
 
-    allow_throttle = sm['longitudinalPlan'].allowThrottle or not self._longitudinal_control
-    self._blend_filter.update(int(allow_throttle))
+    self._blend_filter.update(int(self._path_highlighted(sm)))
 
     if self._experimental_mode:
       # Draw with acceleration coloring
