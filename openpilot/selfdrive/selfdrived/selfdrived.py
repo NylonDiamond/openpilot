@@ -102,6 +102,7 @@ class SelfdriveD:
     self.is_metric = self.params.get_bool("IsMetric")
     self.is_ldw_enabled = self.params.get_bool("IsLdwEnabled")
     self.disengage_on_accelerator = self.params.get_bool("DisengageOnAccelerator")
+    self.car_events.reverse_gear_filter.enabled = self.params.get_bool("ReverseGearDebounce")
 
     # read this off the car we actually booted with rather than the param, so it cannot
     # disagree with how the panda was configured
@@ -571,6 +572,7 @@ class SelfdriveD:
       self.is_metric = self.params.get_bool("IsMetric")
       self.is_ldw_enabled = self.params.get_bool("IsLdwEnabled")
       self.disengage_on_accelerator = self.params.get_bool("DisengageOnAccelerator")
+      self.car_events.reverse_gear_filter.enabled = self.params.get_bool("ReverseGearDebounce")
       self.experimental_mode = self.params.get_bool("ExperimentalMode") and self.CP.openpilotLongitudinalControl
       self.personality = self.params.get("LongitudinalPersonality", return_default=True)
       time.sleep(0.1)

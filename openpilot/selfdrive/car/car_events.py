@@ -5,6 +5,7 @@ from opendbc.car.car_helpers import interfaces
 from opendbc.car.interfaces import MAX_CTRL_SPEED
 from opendbc.car.toyota.values import ToyotaFlags
 
+from openpilot.selfdrive.car.gear_debounce import ReverseGearFilter
 from openpilot.selfdrive.selfdrived.events import Events
 
 ButtonType = structs.CarState.ButtonEvent.Type
@@ -21,6 +22,9 @@ class CarEvents:
     self.low_speed_alert = False
     self.no_steer_warning = False
     self.silent_steer_warning = True
+
+    # selfdrived owns the param read and sets .enabled on this
+    self.reverse_gear_filter = ReverseGearFilter()
 
   def update(self, CS: car.CarState, CS_prev: car.CarState, CC: car.CarControl):
     if self.CP.brand in ('body', 'mock'):
@@ -109,7 +113,7 @@ class CarEvents:
       events.add(EventName.seatbeltNotLatched)
     if CS.gearShifter != GearShifter.drive and CS.gearShifter not in CI.DRIVABLE_GEARS:
       events.add(EventName.wrongGear)
-    if CS.gearShifter == GearShifter.reverse:
+    if self.reverse_gear_filter.update(CS.gearShifter == GearShifter.reverse):
       events.add(EventName.reverseGear)
     if not CS.cruiseState.available:
       events.add(EventName.wrongCarMode)

@@ -40,6 +40,11 @@ DESCRIPTIONS = {
     "then stays on through brake presses and cancels until you switch EyeSight off with the button on the steering wheel. " +
     "Without this, anything that stops cruise also stops steering."
   ),
+  "ReverseGearDebounce": tr_noop(
+    "Shifting into park runs the lever through reverse on the way, and openpilot acts on that the instant it sees it, " +
+    "so a take control alert fires while steering is still on. This makes it wait a tenth of a second first. " +
+    "Genuinely selecting reverse is detected that much later."
+  ),
   "AlwaysOnDM": tr_noop("Enable driver monitoring even when openpilot is not engaged."),
   'RecordFront': tr_noop("Upload data from the cabin camera and help improve the driver monitoring algorithm."),
   "IsMetric": tr_noop("Display speed in km/h instead of mph."),
@@ -79,6 +84,12 @@ class TogglesLayout(Widget):
         "chffr_wheel.png",
         # changes what the panda will allow, so it can only be applied at car init
         True,
+      ),
+      "ReverseGearDebounce": (
+        lambda: tr("Ignore Reverse While Shifting"),
+        DESCRIPTIONS["ReverseGearDebounce"],
+        "warning.png",
+        False,
       ),
       "IsLdwEnabled": (
         lambda: tr("Enable Lane Departure Warnings"),
