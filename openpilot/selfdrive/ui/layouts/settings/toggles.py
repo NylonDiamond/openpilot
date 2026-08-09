@@ -35,6 +35,11 @@ DESCRIPTIONS = {
     "Choosing a delay lets openpilot start the lane change on its own after that long, as long as the blind spot is clear. " +
     "The blind spot monitor and the 20 mph minimum speed still apply, and steering towards the signal always starts the change immediately."
   ),
+  "MadsEnabled": tr_noop(
+    "Keep steering active when adaptive cruise drops out. Steering starts the first time you engage cruise, " +
+    "then stays on through brake presses and cancels until you switch EyeSight off with the button on the steering wheel. " +
+    "Without this, anything that stops cruise also stops steering."
+  ),
   "AlwaysOnDM": tr_noop("Enable driver monitoring even when openpilot is not engaged."),
   'RecordFront': tr_noop("Upload data from the cabin camera and help improve the driver monitoring algorithm."),
   "IsMetric": tr_noop("Display speed in km/h instead of mph."),
@@ -67,6 +72,13 @@ class TogglesLayout(Widget):
         DESCRIPTIONS["DisengageOnAccelerator"],
         "disengage_on_accelerator.png",
         False,
+      ),
+      "MadsEnabled": (
+        lambda: tr("Keep Steering On Without Cruise"),
+        DESCRIPTIONS["MadsEnabled"],
+        "chffr_wheel.png",
+        # changes what the panda will allow, so it can only be applied at car init
+        True,
       ),
       "IsLdwEnabled": (
         lambda: tr("Enable Lane Departure Warnings"),

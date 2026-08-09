@@ -7,6 +7,7 @@ import openpilot.cereal.messaging as messaging
 
 from openpilot.cereal import log
 from opendbc.car.structs import car
+from opendbc.car.subaru.values import SubaruSafetyFlags
 from openpilot.cereal.visionipc import VisionStreamType
 from msgq.visionipc import VisionIpcClient
 
@@ -101,6 +102,11 @@ class SelfdriveD:
     self.is_metric = self.params.get_bool("IsMetric")
     self.is_ldw_enabled = self.params.get_bool("IsLdwEnabled")
     self.disengage_on_accelerator = self.params.get_bool("DisengageOnAccelerator")
+
+    # read this off the car we actually booted with rather than the param, so it cannot
+    # disagree with how the panda was configured
+    self.mads_enabled = (self.CP.brand == 'subaru' and len(self.CP.safetyConfigs) > 0 and
+                         bool(self.CP.safetyConfigs[0].safetyParam & SubaruSafetyFlags.MADS))
 
     car_recognized = self.CP.brand != 'mock'
 
@@ -247,9 +253,12 @@ class SelfdriveD:
           self.events.add(EventName.pcmEnable)
 
       # Disable on rising edge of accelerator or brake. Also disable on brake when speed > 0
+      # MADS deliberately survives the brake, since holding lateral through an ACC dropout
+      # is the point of it. the accelerator still disengages if that toggle is on.
+      braked = (CS.brakePressed and (not self.CS_prev.brakePressed or not CS.standstill)) or \
+               (CS.regenBraking and (not self.CS_prev.regenBraking or not CS.standstill))
       if (CS.gasPressed and not self.CS_prev.gasPressed and self.disengage_on_accelerator) or \
-        (CS.brakePressed and (not self.CS_prev.brakePressed or not CS.standstill)) or \
-        (CS.regenBraking and (not self.CS_prev.regenBraking or not CS.standstill)):
+        (braked and not self.mads_enabled):
         self.events.add(EventName.pedalPressed)
 
     # Create events for temperature, disk space, and memory
