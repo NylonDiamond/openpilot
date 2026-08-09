@@ -7,7 +7,7 @@ import openpilot.cereal.messaging as messaging
 
 from openpilot.cereal import log
 from opendbc.car.structs import car
-from opendbc.car.subaru.values import SubaruSafetyFlags
+from opendbc.car.subaru.values import is_mads_enabled as subaru_mads_enabled
 from openpilot.cereal.visionipc import VisionStreamType
 from msgq.visionipc import VisionIpcClient
 
@@ -105,8 +105,7 @@ class SelfdriveD:
 
     # read this off the car we actually booted with rather than the param, so it cannot
     # disagree with how the panda was configured
-    self.mads_enabled = (self.CP.brand == 'subaru' and len(self.CP.safetyConfigs) > 0 and
-                         bool(self.CP.safetyConfigs[0].safetyParam & SubaruSafetyFlags.MADS))
+    self.mads_enabled = self.CP.brand == 'subaru' and subaru_mads_enabled(self.CP)
 
     car_recognized = self.CP.brand != 'mock'
 
