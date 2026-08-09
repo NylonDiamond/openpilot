@@ -77,7 +77,9 @@ class TestAlerts(OpenpilotTestCase):
     try:
       for event in (log.OnroadEvent.EventName.preLaneChangeLeft, log.OnroadEvent.EventName.preLaneChangeRight):
         callback = EVENTS[event][ET.WARNING]
-        assert callable(callback)
+        # narrows the Alert | AlertCallbackType union. callable() does not: Alert is a class,
+        # so it stays in the union and the call below has no known signature.
+        assert not isinstance(callback, Alert)
 
         seen = set()
         for auto in (False, True):

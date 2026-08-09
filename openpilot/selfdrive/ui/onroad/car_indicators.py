@@ -14,8 +14,8 @@ from openpilot.system.ui.widgets import Widget
 class IndicatorConfig:
   arrow_width: int = 104
   arrow_height: int = 96
-  # from screen centre to the inner edge of each arrow. must clear the current speed readout,
-  # whose widest realistic case ("188") measures 163px either side of centre.
+  # from screen center to the inner edge of each arrow. must clear the current speed readout,
+  # whose widest realistic case ("188") measures 163px either side of center.
   arrow_gap: int = 210
   # matches the absolute y hud_renderer uses for the current speed, so the arrows sit level with it
   arrow_center_y: int = 180
