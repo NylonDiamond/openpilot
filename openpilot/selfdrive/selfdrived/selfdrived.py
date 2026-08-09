@@ -419,7 +419,11 @@ class SelfdriveD:
 
     if not REPLAY:
       # Check for mismatch between openpilot and car's PCM
-      cruise_mismatch = CS.cruiseState.enabled and (not self.enabled or not self.CP.pcmCruise)
+      # under MADS cruiseState.enabled is openpilot's own latch rather than the PCM, so it
+      # stays high while openpilot is disengaged and would raise this on its own. compare
+      # against the stock ACC state, which is what the check is actually about.
+      pcm_engaged = CS.stockCruiseEngaged if self.mads_enabled else CS.cruiseState.enabled
+      cruise_mismatch = pcm_engaged and (not self.enabled or not self.CP.pcmCruise)
       self.cruise_mismatch_counter = self.cruise_mismatch_counter + 1 if cruise_mismatch else 0
       if self.cruise_mismatch_counter > int(6. / DT_CTRL):
         self.events.add(EventName.cruiseMismatch)
