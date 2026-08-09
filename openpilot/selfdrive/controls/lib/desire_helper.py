@@ -17,6 +17,10 @@ class DesireHelper:
     self.prev_one_blinker = False
     self.desire = log.Desire.none
 
+    # seconds to wait in preLaneChange before starting without a nudge, 0 disables
+    self.auto_lane_change_delay = 0.0
+    self.pre_lane_change_timer = 0.0
+
   @staticmethod
   def get_lane_change_direction(CS):
     return LaneChangeDirection.left if CS.leftBlinker else LaneChangeDirection.right
@@ -34,6 +38,7 @@ class DesireHelper:
       if self.lane_change_state == LaneChangeState.off and one_blinker and not self.prev_one_blinker and not below_lane_change_speed:
         self.lane_change_state = LaneChangeState.preLaneChange
         self.lane_change_timer = 0.0
+        self.pre_lane_change_timer = 0.0
         # Initialize lane change direction to prevent UI alert flicker
         self.lane_change_direction = self.get_lane_change_direction(carstate)
 
@@ -48,11 +53,19 @@ class DesireHelper:
         blindspot_detected = ((carstate.leftBlindspot and self.lane_change_direction == LaneChangeDirection.left) or
                               (carstate.rightBlindspot and self.lane_change_direction == LaneChangeDirection.right))
 
+        # only count down while the blindspot is clear, a car appearing there restarts the wait
+        if blindspot_detected:
+          self.pre_lane_change_timer = 0.0
+        else:
+          self.pre_lane_change_timer += DT_MDL
+
+        auto_lane_change = self.auto_lane_change_delay > 0 and self.pre_lane_change_timer >= self.auto_lane_change_delay
+
         if not one_blinker or below_lane_change_speed:
           self.lane_change_state = LaneChangeState.off
           self.lane_change_direction = LaneChangeDirection.none
           self.lane_change_timer = 0.0
-        elif torque_applied and not blindspot_detected:
+        elif (torque_applied or auto_lane_change) and not blindspot_detected:
           self.lane_change_state = LaneChangeState.laneChangeStarting
           self.lane_change_timer = 0.0
 
