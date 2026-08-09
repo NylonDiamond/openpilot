@@ -9,7 +9,7 @@ from opendbc.car.structs import car
 from openpilot.cereal.messaging import SubMaster
 from openpilot.common.basedir import BASEDIR
 from openpilot.common.params import Params
-from openpilot.selfdrive.selfdrived.events import Alert, EVENTS, ET
+from openpilot.selfdrive.selfdrived.events import ALERT_CONTEXT, Alert, EVENTS, ET
 from openpilot.selfdrive.selfdrived.alertmanager import set_offroad_alert
 from openpilot.selfdrive.test.process_replay.process_replay import CONFIGS
 
@@ -69,6 +69,33 @@ class TestAlerts(OpenpilotTestCase):
 
         if event_type not in (ET.WARNING, ET.PERMANENT, ET.PRE_ENABLE):
           assert a.creation_delay == 0.
+
+  def test_pre_lane_change_alerts(self):
+    # these are callbacks now, so test_alert_sanity_check skips them. both the nudge and the
+    # automatic wording still have to be well formed alerts.
+    was_auto = ALERT_CONTEXT.auto_lane_change
+    try:
+      for event in (log.OnroadEvent.EventName.preLaneChangeLeft, log.OnroadEvent.EventName.preLaneChangeRight):
+        callback = EVENTS[event][ET.WARNING]
+        assert callable(callback)
+
+        seen = set()
+        for auto in (False, True):
+          ALERT_CONTEXT.auto_lane_change = auto
+          a = callback(self.CP, self.CS, self.sm, False, 0, log.LongitudinalPersonality.standard)
+          assert isinstance(a, Alert)
+          assert len(a.alert_text_1) > 0
+          if a.alert_size == AlertSize.small:
+            assert len(a.alert_text_2) == 0
+          elif a.alert_size == AlertSize.mid:
+            assert len(a.alert_text_2) > 0
+          assert a.duration >= 0.
+          seen.add((a.alert_text_1, a.alert_text_2))
+
+        # the whole point is that the two modes read differently
+        assert len(seen) == 2
+    finally:
+      ALERT_CONTEXT.auto_lane_change = was_auto
 
   def test_offroad_alerts(self):
     params = Params()

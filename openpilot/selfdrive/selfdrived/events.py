@@ -216,9 +216,29 @@ def get_display_speed(speed_ms: float, metric: bool) -> str:
   return f"{speed} {unit}"
 
 
+class AlertContext:
+  """Settings the alert text depends on that no message carries.
+
+  AlertCallbackType has a fixed signature and cereal has no field for this, so selfdrived
+  pushes the value here rather than growing the schema or having a callback hit Params on
+  every frame the alert is up.
+  """
+  auto_lane_change: bool = False
+
+
+ALERT_CONTEXT = AlertContext()
+
+
 # ********** alert callback functions **********
 
 AlertCallbackType = Callable[[car.CarParams, car.CarState, messaging.SubMaster, bool, int, log.ControlsState], Alert]
+
+
+def pre_lane_change_alert(nudge: Alert, auto: Alert) -> AlertCallbackType:
+  """Telling the driver to steer is wrong when openpilot is about to go on its own."""
+  def func(CP: car.CarParams, CS: car.CarState, sm: messaging.SubMaster, metric: bool, soft_disable_time: int, personality) -> Alert:
+    return auto if ALERT_CONTEXT.auto_lane_change else nudge
+  return func
 
 
 def soft_disable_alert(alert_text_2: str) -> AlertCallbackType:
@@ -584,19 +604,33 @@ EVENTS: dict[int, dict[str, Alert | AlertCallbackType]] = {
   },
 
   EventName.preLaneChangeLeft: {
-    ET.WARNING: Alert(
-      "Steer Left to Start Lane Change Once Safe",
-      "",
-      AlertStatus.normal, AlertSize.small,
-      Priority.LOW, VisualAlert.none, AudibleAlert.none, .1),
+    ET.WARNING: pre_lane_change_alert(
+      Alert(
+        "Steer Left to Start Lane Change Once Safe",
+        "",
+        AlertStatus.normal, AlertSize.small,
+        Priority.LOW, VisualAlert.none, AudibleAlert.none, .1),
+      Alert(
+        "Lane Change Left Starting Once Safe",
+        "",
+        AlertStatus.normal, AlertSize.small,
+        Priority.LOW, VisualAlert.none, AudibleAlert.none, .1),
+    ),
   },
 
   EventName.preLaneChangeRight: {
-    ET.WARNING: Alert(
-      "Steer Right to Start Lane Change Once Safe",
-      "",
-      AlertStatus.normal, AlertSize.small,
-      Priority.LOW, VisualAlert.none, AudibleAlert.none, .1),
+    ET.WARNING: pre_lane_change_alert(
+      Alert(
+        "Steer Right to Start Lane Change Once Safe",
+        "",
+        AlertStatus.normal, AlertSize.small,
+        Priority.LOW, VisualAlert.none, AudibleAlert.none, .1),
+      Alert(
+        "Lane Change Right Starting Once Safe",
+        "",
+        AlertStatus.normal, AlertSize.small,
+        Priority.LOW, VisualAlert.none, AudibleAlert.none, .1),
+    ),
   },
 
   EventName.laneChangeBlocked: {
@@ -1034,18 +1068,32 @@ if HARDWARE.get_device_type() == 'mici':
         Priority.LOW, VisualAlert.none, AudibleAlert.none, .2),
     },
     EventName.preLaneChangeLeft: {
-      ET.WARNING: Alert(
-        "Steer Left",
-        "Confirm Lane Change",
-        AlertStatus.normal, AlertSize.mid,
-        Priority.LOW, VisualAlert.none, AudibleAlert.none, .1),
+      ET.WARNING: pre_lane_change_alert(
+        Alert(
+          "Steer Left",
+          "Confirm Lane Change",
+          AlertStatus.normal, AlertSize.mid,
+          Priority.LOW, VisualAlert.none, AudibleAlert.none, .1),
+        Alert(
+          "Lane Change Left",
+          "Starting Once Safe",
+          AlertStatus.normal, AlertSize.mid,
+          Priority.LOW, VisualAlert.none, AudibleAlert.none, .1),
+      ),
     },
     EventName.preLaneChangeRight: {
-      ET.WARNING: Alert(
-        "Steer Right",
-        "Confirm Lane Change",
-        AlertStatus.normal, AlertSize.mid,
-        Priority.LOW, VisualAlert.none, AudibleAlert.none, .1),
+      ET.WARNING: pre_lane_change_alert(
+        Alert(
+          "Steer Right",
+          "Confirm Lane Change",
+          AlertStatus.normal, AlertSize.mid,
+          Priority.LOW, VisualAlert.none, AudibleAlert.none, .1),
+        Alert(
+          "Lane Change Right",
+          "Starting Once Safe",
+          AlertStatus.normal, AlertSize.mid,
+          Priority.LOW, VisualAlert.none, AudibleAlert.none, .1),
+      ),
     },
     EventName.laneChangeBlocked: {
       ET.WARNING: Alert(
