@@ -3,7 +3,9 @@
 import os
 import usb1
 import time
+import shutil
 import signal
+import filecmp
 import subprocess
 
 from panda import Panda, PandaDFU, PandaProtocolMismatch, McuType, FW_PATH
@@ -11,6 +13,30 @@ from openpilot.common.basedir import BASEDIR
 from openpilot.common.params import Params
 from openpilot.common.hardware import HARDWARE
 from openpilot.common.swaglog import cloudlog
+
+
+PINNED_FW_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "firmware")
+
+
+def install_pinned_firmware() -> None:
+  """Put this branch's panda firmware in the place the panda tooling reads from.
+
+  AGNOS has no ARM toolchain, so the device can never build panda firmware. What it does do
+  on every boot is re-sign panda/board/obj/panda_h7/main.bin, which is whatever the last
+  machine that could compile left behind. That silently overwrites anything copied into
+  board/obj, so the firmware is pinned here instead and restored after the build, before
+  the panda is flashed.
+  """
+  for fn in (McuType.H7.config.app_fn, McuType.H7.config.bootstub_fn):
+    src = os.path.join(PINNED_FW_PATH, fn)
+    dst = os.path.join(FW_PATH, fn)
+    if not os.path.exists(src):
+      continue
+    if os.path.exists(dst) and filecmp.cmp(src, dst, shallow=False):
+      continue
+    cloudlog.warning(f"installing pinned panda firmware: {fn}")
+    os.makedirs(FW_PATH, exist_ok=True)
+    shutil.copyfile(src, dst)
 
 
 def get_expected_signature() -> bytes:
@@ -63,6 +89,8 @@ def main() -> None:
   process = None
   do_exit = False
   signal.signal(signal.SIGINT, signal_handler)
+
+  install_pinned_firmware()
 
   # check health for lost heartbeat
   try:
