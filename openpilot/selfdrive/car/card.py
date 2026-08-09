@@ -18,7 +18,7 @@ from opendbc.car.carlog import carlog
 from opendbc.car.fw_versions import ObdCallback
 from opendbc.car.car_helpers import get_car, interfaces
 from opendbc.car.interfaces import CarInterfaceBase, RadarInterfaceBase
-from opendbc.car.subaru.values import SubaruSafetyFlags
+from opendbc.car.subaru.values import enable_mads as subaru_enable_mads
 from openpilot.selfdrive.pandad import can_capnp_to_list, can_list_to_can_capnp
 from openpilot.selfdrive.car.cruise import VCruiseHelper
 
@@ -121,7 +121,7 @@ class Car:
     # MADS keeps lateral engaged across an ACC dropout. it changes what the panda will
     # allow, so it is applied here at car init and needs an onroad cycle to take effect
     if not self.CP.passive and self.CP.brand == 'subaru' and self.params.get_bool("MadsEnabled"):
-      self.CP.safetyConfigs[0].safetyParam |= SubaruSafetyFlags.MADS
+      subaru_enable_mads(self.CP)
 
     if self.CP.secOcRequired:
       # Copy user key if available
