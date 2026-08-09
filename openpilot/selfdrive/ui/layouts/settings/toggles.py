@@ -11,6 +11,9 @@ from openpilot.selfdrive.ui.ui_state import ui_state
 
 PERSONALITY_TO_INT = log.LongitudinalPersonality.schema.enumerants
 
+# seconds to wait before starting a lane change without a nudge, 0 keeps the nudge required
+AUTO_LANE_CHANGE_TIMERS = (0, 1, 2, 3)
+
 # Description constants
 DESCRIPTIONS = {
   "OpenpilotEnabledToggle": tr_noop(
@@ -26,6 +29,11 @@ DESCRIPTIONS = {
   "IsLdwEnabled": tr_noop(
     "Receive alerts to steer back into the lane when your vehicle drifts over a detected lane line " +
     "without a turn signal activated while driving over 31 mph (50 km/h)."
+  ),
+  "AutoLaneChangeTimer": tr_noop(
+    "Nudge requires you to steer towards the turn signal before openpilot will change lanes. " +
+    "Choosing a delay lets openpilot start the lane change on its own after that long, as long as the blind spot is clear. " +
+    "The blind spot monitor and the 20 mph minimum speed still apply, and steering towards the signal always starts the change immediately."
   ),
   "AlwaysOnDM": tr_noop("Enable driver monitoring even when openpilot is not engaged."),
   'RecordFront': tr_noop("Upload data from the cabin camera and help improve the driver monitoring algorithm."),
@@ -102,6 +110,17 @@ class TogglesLayout(Widget):
       icon="speed_limit.png"
     )
 
+    auto_lane_change_timer = self._params.get("AutoLaneChangeTimer", return_default=True)
+    self._auto_lane_change_setting = multiple_button_item(
+      lambda: tr("Automatic Lane Change"),
+      lambda: tr(DESCRIPTIONS["AutoLaneChangeTimer"]),
+      buttons=[lambda: tr("Nudge"), "1s", "2s", "3s"],
+      button_width=200,
+      callback=self._set_auto_lane_change_timer,
+      selected_index=AUTO_LANE_CHANGE_TIMERS.index(auto_lane_change_timer) if auto_lane_change_timer in AUTO_LANE_CHANGE_TIMERS else 0,
+      icon="road.png",
+    )
+
     self._toggles = {}
     self._locked_toggles = set()
     for param, (title, desc, icon, needs_restart) in self._toggle_defs.items():
@@ -134,6 +153,10 @@ class TogglesLayout(Widget):
       # insert longitudinal personality after NDOG toggle
       if param == "DisengageOnAccelerator":
         self._toggles["LongitudinalPersonality"] = self._long_personality_setting
+
+      # group automatic lane change with the other lane related setting
+      if param == "IsLdwEnabled":
+        self._toggles["AutoLaneChangeTimer"] = self._auto_lane_change_setting
 
     self._update_experimental_mode_icon()
     self._scroller = Scroller(list(self._toggles.values()), line_separator=True, spacing=0)
@@ -240,6 +263,9 @@ class TogglesLayout(Widget):
     self._params.put_bool(param, state, block=True)
     if self._toggle_defs[param][3]:
       self._params.put_bool("OnroadCycleRequested", True, block=True)
+
+  def _set_auto_lane_change_timer(self, button_index: int):
+    self._params.put("AutoLaneChangeTimer", AUTO_LANE_CHANGE_TIMERS[button_index], block=True)
 
   def _set_longitudinal_personality(self, button_index: int):
     self._params.put("LongitudinalPersonality", button_index, block=True)
