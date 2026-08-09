@@ -14,6 +14,9 @@ PERSONALITY_TO_INT = log.LongitudinalPersonality.schema.enumerants
 # seconds to wait before starting a lane change without a nudge, 0 keeps the nudge required
 AUTO_LANE_CHANGE_TIMERS = (0, 1, 2, 3)
 
+# seconds to wait after a turn signal cancels before steering comes back
+BLINKER_PAUSE_DELAYS = (0, 1, 2, 3)
+
 # onroad display settings that reclaim parts of the UI the stock build only uses to report
 # longitudinal state. nothing for them to do on a car openpilot drives end to end.
 LATERAL_ONLY_DISPLAY_TOGGLES = ("ShowLeadIndicator", "EngagementPathColor", "HideExperimentalButton")
@@ -38,6 +41,17 @@ DESCRIPTIONS = {
     "Nudge requires you to steer towards the turn signal before openpilot will change lanes. " +
     "Choosing a delay lets openpilot start the lane change on its own after that long, as long as the blind spot is clear. " +
     "The blind spot monitor and the 20 mph minimum speed still apply, and steering towards the signal always starts the change immediately."
+  ),
+  "BlinkerPause": tr_noop(
+    "openpilot holds the lane straight through a turn signal, so every junction and driveway is a fight with the wheel. " +
+    "This hands steering back for as long as the signal is on. It only starts below 20 mph, where openpilot would not offer " +
+    "a lane change anyway, so signaling on the highway still works exactly as it does now. " +
+    "Once it starts, steering stays off until the signal cancels, so a signal left on leaves steering off."
+  ),
+  "BlinkerPauseDelay": tr_noop(
+    "How long to wait after the turn signal cancels before steering comes back. " +
+    "The signal cancels as the wheel returns to center, which is the middle of a turn rather than the end of it, " +
+    "so a short delay stops openpilot taking the wheel back while you are still turning."
   ),
   "MadsEnabled": tr_noop(
     "Keep steering active when adaptive cruise drops out. Steering starts the first time you engage cruise, " +
@@ -128,6 +142,12 @@ class TogglesLayout(Widget):
         "warning.png",
         False,
       ),
+      "BlinkerPause": (
+        lambda: tr("Pause Steering On Turn Signal"),
+        DESCRIPTIONS["BlinkerPause"],
+        "chffr_wheel.png",
+        False,
+      ),
       "ShowLeadIndicator": (
         lambda: tr("Show Lead Car Marker"),
         DESCRIPTIONS["ShowLeadIndicator"],
@@ -193,6 +213,17 @@ class TogglesLayout(Widget):
       icon="road.png",
     )
 
+    blinker_pause_delay = self._params.get("BlinkerPauseDelay", return_default=True)
+    self._blinker_pause_delay_setting = multiple_button_item(
+      lambda: tr("Resume Steering After"),
+      lambda: tr(DESCRIPTIONS["BlinkerPauseDelay"]),
+      buttons=[lambda: tr("Now"), "1s", "2s", "3s"],
+      button_width=200,
+      callback=self._set_blinker_pause_delay,
+      selected_index=BLINKER_PAUSE_DELAYS.index(blinker_pause_delay) if blinker_pause_delay in BLINKER_PAUSE_DELAYS else 1,
+      icon="chffr_wheel.png",
+    )
+
     self._toggles = {}
     self._locked_toggles = set()
     for param, (title, desc, icon, needs_restart) in self._toggle_defs.items():
@@ -229,6 +260,10 @@ class TogglesLayout(Widget):
       # group automatic lane change with the other lane related setting
       if param == "IsLdwEnabled":
         self._toggles["AutoLaneChangeTimer"] = self._auto_lane_change_setting
+
+      # the delay only means anything with the pause on, so keep it directly underneath
+      if param == "BlinkerPause":
+        self._toggles["BlinkerPauseDelay"] = self._blinker_pause_delay_setting
 
     self._update_experimental_mode_icon()
     self._scroller = Scroller(list(self._toggles.values()), line_separator=True, spacing=0)
@@ -298,6 +333,8 @@ class TogglesLayout(Widget):
     for param in self._toggle_defs:
       self._toggles[param].action_item.set_state(self._params.get_bool(param))
 
+    self._blinker_pause_delay_setting.action_item.set_enabled(self._params.get_bool("BlinkerPause"))
+
     # these toggles need restart, block while engaged
     for toggle_def in self._toggle_defs:
       if self._toggle_defs[toggle_def][3] and toggle_def not in self._locked_toggles:
@@ -339,8 +376,15 @@ class TogglesLayout(Widget):
     if self._toggle_defs[param][3]:
       self._params.put_bool("OnroadCycleRequested", True, block=True)
 
+    # _update_toggles only runs on show and on engaged transitions, so grey the delay here too
+    if param == "BlinkerPause":
+      self._blinker_pause_delay_setting.action_item.set_enabled(state)
+
   def _set_auto_lane_change_timer(self, button_index: int):
     self._params.put("AutoLaneChangeTimer", AUTO_LANE_CHANGE_TIMERS[button_index], block=True)
+
+  def _set_blinker_pause_delay(self, button_index: int):
+    self._params.put("BlinkerPauseDelay", BLINKER_PAUSE_DELAYS[button_index], block=True)
 
   def _set_longitudinal_personality(self, button_index: int):
     self._params.put("LongitudinalPersonality", button_index, block=True)
