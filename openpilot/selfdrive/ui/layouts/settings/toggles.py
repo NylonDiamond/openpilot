@@ -44,6 +44,11 @@ DESCRIPTIONS = {
     "then stays on through brake presses and cancels until you switch EyeSight off with the button on the steering wheel. " +
     "Without this, anything that stops cruise also stops steering."
   ),
+  "MadsMainSwitch": tr_noop(
+    "Requires Keep Steering On Without Cruise. Switching cruise on is enough to start steering, with no set speed and no need to engage cruise. " +
+    "EyeSight main is already on when the car starts, so tap the cruise button off and back on once openpilot is up. " +
+    "Switching cruise off still stops steering."
+  ),
   "ReverseGearDebounce": tr_noop(
     "Shifting into park runs the lever through reverse on the way, and openpilot acts on that the instant it sees it, " +
     "so a take control alert fires while steering is still on. This makes it wait a tenth of a second first. " +
@@ -100,6 +105,13 @@ class TogglesLayout(Widget):
       "MadsEnabled": (
         lambda: tr("Keep Steering On Without Cruise"),
         DESCRIPTIONS["MadsEnabled"],
+        "chffr_wheel.png",
+        # changes what the panda will allow, so it can only be applied at car init
+        True,
+      ),
+      "MadsMainSwitch": (
+        lambda: tr("Steer With The Cruise Switch"),
+        DESCRIPTIONS["MadsMainSwitch"],
         "chffr_wheel.png",
         # changes what the panda will allow, so it can only be applied at car init
         True,
