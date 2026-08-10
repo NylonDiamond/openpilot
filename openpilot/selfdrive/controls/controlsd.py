@@ -111,16 +111,15 @@ class Controls:
     # hazards are both signals at once, which is not a turn signal.
     one_blinker = CS.leftBlinker != CS.rightBlinker
 
-    # how far the wheel sits from where openpilot would be holding it, so the pause can wait for
-    # the turn to actually finish instead of only for its timer. the model keeps saying what it
-    # would do the whole time it is paused, and this is the conversion latcontrol_angle makes to
-    # act on that, so the two are the same number in the same units
-    blinker_pause_angle_error = None
+    # how far the driver's line sits from the one openpilot would be steering, so the pause can
+    # wait for the turn to actually finish instead of only for its timer. the model keeps saying
+    # what it would do the whole time it is paused, and self.curvature is the wheel in the same
+    # units already, with roll and the angle offset taken out of both
+    blinker_pause_curvature_error = None
     if self.sm.all_checks(['modelV2']):
-      model_angle = math.degrees(self.VM.get_steer_from_curvature(-model_v2.action.desiredCurvature, CS.vEgo, lp.roll))
-      blinker_pause_angle_error = model_angle + lp.angleOffsetDeg - CS.steeringAngleDeg
+      blinker_pause_curvature_error = model_v2.action.desiredCurvature - self.curvature
 
-    CC.latActive = CC.latActive and not self.blinker_pause.update(CC.latActive, one_blinker, CS.vEgo, blinker_pause_angle_error)
+    CC.latActive = CC.latActive and not self.blinker_pause.update(CC.latActive, one_blinker, CS.vEgo, blinker_pause_curvature_error)
 
     actuators = CC.actuators
     actuators.longControlState = self.LoC.long_control_state
