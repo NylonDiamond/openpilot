@@ -54,9 +54,10 @@ DESCRIPTIONS = {
     "Once it starts, steering stays off until the signal cancels, so a signal left on leaves steering off."
   ),
   "BlinkerPauseDelay": tr_noop(
-    "How long to wait after the turn signal cancels before steering comes back. " +
+    "The shortest time to wait after the turn signal cancels before steering comes back. " +
     "The signal cancels as the wheel returns to center, which is the middle of a turn rather than the end of it, " +
-    "so a short delay stops openpilot taking the wheel back while you are still turning."
+    "so steering also waits until the wheel is close to where openpilot would be holding it. " +
+    "Whichever of the two takes longer wins, up to a few seconds."
   ),
   "CurveAdvisory": tr_noop(
     "Show a warning when the speed you are carrying into an upcoming curve is high. " +
