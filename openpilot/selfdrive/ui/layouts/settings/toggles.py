@@ -8,6 +8,7 @@ from openpilot.system.ui.lib.application import gui_app
 from openpilot.system.ui.lib.multilang import tr, tr_noop
 from openpilot.system.ui.widgets import DialogResult
 from openpilot.selfdrive.ui.ui_state import ui_state
+from openpilot.selfdrive.controls.lib.blinker_pause import ANY_SPEED_MPH, BLINKER_PAUSE_SPEEDS_MPH
 from openpilot.selfdrive.controls.lib.lane_position import LANE_POSITION_OFFSETS_CM
 
 PERSONALITY_TO_INT = log.LongitudinalPersonality.schema.enumerants
@@ -17,6 +18,9 @@ AUTO_LANE_CHANGE_TIMERS = (0, 1, 2, 3)
 
 # seconds to wait after a turn signal cancels before steering comes back
 BLINKER_PAUSE_DELAYS = (0, 1, 2, 3)
+
+# the speeds in BLINKER_PAUSE_SPEEDS_MPH as they read on the buttons
+BLINKER_PAUSE_SPEED_LABELS = ("Off", "20 mph", "40 mph", "Any")
 
 # how early to warn about an upcoming curve, 0 is off. the levels index a table of lateral
 # acceleration thresholds in curve_advisory.py rather than meaning anything on their own
@@ -47,10 +51,12 @@ DESCRIPTIONS = {
     "Choosing a delay lets openpilot start the lane change on its own after that long, as long as the blind spot is clear. " +
     "The blind spot monitor and the 20 mph minimum speed still apply, and steering towards the signal always starts the change immediately."
   ),
-  "BlinkerPause": tr_noop(
+  "BlinkerPauseSpeed": tr_noop(
     "openpilot holds the lane straight through a turn signal, so every junction and driveway is a fight with the wheel. " +
-    "This hands steering back for as long as the signal is on. It only starts below 20 mph, where openpilot would not offer " +
-    "a lane change anyway, so signaling on the highway still works exactly as it does now. " +
+    "This hands steering back for as long as the signal is on, below the speed you pick. " +
+    "At 20 mph nothing else changes, because openpilot would not offer a lane change down there anyway. " +
+    "Above that a turn signal could just as easily mean a lane change, and openpilot cannot tell the two apart, " +
+    "so the higher settings cover turns off faster roads and give up the automatic lane change below the same speed. " +
     "Once it starts, steering stays off until the signal cancels, so a signal left on leaves steering off."
   ),
   "BlinkerPauseDelay": tr_noop(
@@ -166,12 +172,6 @@ class TogglesLayout(Widget):
         "warning.png",
         False,
       ),
-      "BlinkerPause": (
-        lambda: tr("Pause Steering On Turn Signal"),
-        DESCRIPTIONS["BlinkerPause"],
-        "chffr_wheel.png",
-        False,
-      ),
       "ShowLeadIndicator": (
         lambda: tr("Show Lead Car Marker"),
         DESCRIPTIONS["ShowLeadIndicator"],
@@ -241,6 +241,17 @@ class TogglesLayout(Widget):
       callback=self._set_auto_lane_change_timer,
       selected_index=AUTO_LANE_CHANGE_TIMERS.index(auto_lane_change_timer) if auto_lane_change_timer in AUTO_LANE_CHANGE_TIMERS else 0,
       icon="road.png",
+    )
+
+    blinker_pause_speed = self._params.get("BlinkerPauseSpeed", return_default=True)
+    self._blinker_pause_setting = multiple_button_item(
+      lambda: tr("Pause Steering On Turn Signal"),
+      lambda: tr(DESCRIPTIONS["BlinkerPauseSpeed"]),
+      buttons=[lambda label=label: tr(label) for label in BLINKER_PAUSE_SPEED_LABELS],
+      button_width=200,
+      callback=self._set_blinker_pause_speed,
+      selected_index=BLINKER_PAUSE_SPEEDS_MPH.index(blinker_pause_speed) if blinker_pause_speed in BLINKER_PAUSE_SPEEDS_MPH else 1,
+      icon="chffr_wheel.png",
     )
 
     blinker_pause_delay = self._params.get("BlinkerPauseDelay", return_default=True)
@@ -315,9 +326,9 @@ class TogglesLayout(Widget):
         self._toggles["CurveAdvisory"] = self._curve_advisory_setting
         self._toggles["LanePosition"] = self._lane_position_setting
         self._toggles["AutoLaneChangeTimer"] = self._auto_lane_change_setting
-
-      # the delay only means anything with the pause on, so keep it directly underneath
-      if param == "BlinkerPause":
+        # the other two settings a turn signal reaches, and the delay only means anything with
+        # the pause on, so keep the three of them together and in that order
+        self._toggles["BlinkerPauseSpeed"] = self._blinker_pause_setting
         self._toggles["BlinkerPauseDelay"] = self._blinker_pause_delay_setting
 
     self._update_experimental_mode_icon()
@@ -388,7 +399,7 @@ class TogglesLayout(Widget):
     for param in self._toggle_defs:
       self._toggles[param].action_item.set_state(self._params.get_bool(param))
 
-    self._blinker_pause_delay_setting.action_item.set_enabled(self._params.get_bool("BlinkerPause"))
+    self._update_blinker_pause_dependents(self._params.get("BlinkerPauseSpeed", return_default=True))
 
     # these toggles need restart, block while engaged
     for toggle_def in self._toggle_defs:
@@ -431,12 +442,20 @@ class TogglesLayout(Widget):
     if self._toggle_defs[param][3]:
       self._params.put_bool("OnroadCycleRequested", True, block=True)
 
-    # _update_toggles only runs on show and on engaged transitions, so grey the delay here too
-    if param == "BlinkerPause":
-      self._blinker_pause_delay_setting.action_item.set_enabled(state)
-
   def _set_auto_lane_change_timer(self, button_index: int):
     self._params.put("AutoLaneChangeTimer", AUTO_LANE_CHANGE_TIMERS[button_index], block=True)
+
+  def _update_blinker_pause_dependents(self, speed_mph: int):
+    # the delay says nothing with the pause off, and a pause with no speed limit takes every
+    # signal before the lane change assist can see one
+    self._blinker_pause_delay_setting.action_item.set_enabled(speed_mph > 0)
+    self._auto_lane_change_setting.action_item.set_enabled(speed_mph < ANY_SPEED_MPH)
+
+  def _set_blinker_pause_speed(self, button_index: int):
+    speed_mph = BLINKER_PAUSE_SPEEDS_MPH[button_index]
+    self._params.put("BlinkerPauseSpeed", speed_mph, block=True)
+    # _update_toggles only runs on show and on engaged transitions, so grey the others here too
+    self._update_blinker_pause_dependents(speed_mph)
 
   def _set_blinker_pause_delay(self, button_index: int):
     self._params.put("BlinkerPauseDelay", BLINKER_PAUSE_DELAYS[button_index], block=True)

@@ -68,7 +68,7 @@ class Controls:
   def update(self):
     self.sm.update(15)
     if self.sm.frame % int(1. / DT_CTRL) == 0:  # ~1Hz, this loop is too hot to read params every frame
-      self.blinker_pause.enabled = self.params.get_bool("BlinkerPause")
+      self.blinker_pause.max_speed = self.params.get("BlinkerPauseSpeed", return_default=True) * CV.MPH_TO_MS
       self.blinker_pause.resume_delay = self.params.get("BlinkerPauseDelay", return_default=True)
     if self.sm.updated["extrinsicsCalibration"]:
       self.pose_calibrator.feed_extrinsics_calibration(self.sm['extrinsicsCalibration'])
