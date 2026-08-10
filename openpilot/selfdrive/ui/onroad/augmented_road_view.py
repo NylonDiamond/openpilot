@@ -113,7 +113,10 @@ class AugmentedRoadView(CameraView):
     rl.draw_rectangle_rounded_lines_ex(border_rect, border_roundness, 10, UI_BORDER_SIZE, border_color)
 
   def _switch_stream_if_needed(self, sm):
-    if sm['selfdriveState'].experimentalMode and WIDE_CAM in self.available_streams:
+    # upstream only does this in experimental mode, which needs openpilot longitudinal control.
+    # the toggle is the only way to reach it on a lateral only car, so either one turns it on.
+    wide_at_low_speed = ui_state.wide_camera_low_speed or sm['selfdriveState'].experimentalMode
+    if wide_at_low_speed and WIDE_CAM in self.available_streams:
       v_ego = sm['carState'].vEgo
       if v_ego < WIDE_CAM_MAX_SPEED:
         target = WIDE_CAM

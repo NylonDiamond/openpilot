@@ -83,6 +83,12 @@ DESCRIPTIONS = {
     "Experimental mode needs openpilot longitudinal control, which this car does not have, " +
     "so the button cannot do anything and only blocks taps in that corner."
   ),
+  "WideCameraLowSpeed": tr_noop(
+    "Switch the driving screen to the wide angle camera below 22 mph (36 km/h), which shows far more of a junction " +
+    "than the narrow camera can. It switches back above 34 mph (54 km/h). " +
+    "This only changes the picture on screen. The driving model reads both cameras at every speed either way. " +
+    "openpilot normally does this only in experimental mode, which this car cannot use."
+  ),
   "AlwaysOnDM": tr_noop("Enable driver monitoring even when openpilot is not engaged."),
   'RecordFront': tr_noop("Upload data from the cabin camera and help improve the driver monitoring algorithm."),
   "IsMetric": tr_noop("Display speed in km/h instead of mph."),
@@ -164,6 +170,12 @@ class TogglesLayout(Widget):
         lambda: tr("Hide Experimental Mode Button"),
         DESCRIPTIONS["HideExperimentalButton"],
         "experimental_grey.png",
+        False,
+      ),
+      "WideCameraLowSpeed": (
+        lambda: tr("Wide Camera At Low Speed"),
+        DESCRIPTIONS["WideCameraLowSpeed"],
+        "road.png",
         False,
       ),
       "AlwaysOnDM": (
