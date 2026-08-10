@@ -17,6 +17,10 @@ AUTO_LANE_CHANGE_TIMERS = (0, 1, 2, 3)
 # seconds to wait after a turn signal cancels before steering comes back
 BLINKER_PAUSE_DELAYS = (0, 1, 2, 3)
 
+# how early to warn about an upcoming curve, 0 is off. the levels index a table of lateral
+# acceleration thresholds in curve_advisory.py rather than meaning anything on their own
+CURVE_ADVISORY_LEVELS = (0, 1, 2, 3)
+
 # onroad display settings that reclaim parts of the UI the stock build only uses to report
 # longitudinal state. nothing for them to do on a car openpilot drives end to end.
 LATERAL_ONLY_DISPLAY_TOGGLES = ("ShowLeadIndicator", "EngagementPathColor", "HideExperimentalButton")
@@ -52,6 +56,12 @@ DESCRIPTIONS = {
     "How long to wait after the turn signal cancels before steering comes back. " +
     "The signal cancels as the wheel returns to center, which is the middle of a turn rather than the end of it, " +
     "so a short delay stops openpilot taking the wheel back while you are still turning."
+  ),
+  "CurveAdvisory": tr_noop(
+    "Show a warning when the speed you are carrying into an upcoming curve is high. " +
+    "EyeSight holds its set speed through a bend, so nothing in the car says anything about this today. " +
+    "The warning is silent and openpilot cannot slow this car, so acting on it is entirely up to you. " +
+    "Late warns only about the sharpest curves, Early warns about gentler ones too."
   ),
   "MadsEnabled": tr_noop(
     "Keep steering active when adaptive cruise drops out. Steering starts the first time you engage cruise, " +
@@ -236,6 +246,17 @@ class TogglesLayout(Widget):
       icon="chffr_wheel.png",
     )
 
+    curve_advisory = self._params.get("CurveAdvisory", return_default=True)
+    self._curve_advisory_setting = multiple_button_item(
+      lambda: tr("Curve Speed Warning"),
+      lambda: tr(DESCRIPTIONS["CurveAdvisory"]),
+      buttons=[lambda: tr("Off"), lambda: tr("Late"), lambda: tr("Normal"), lambda: tr("Early")],
+      button_width=200,
+      callback=self._set_curve_advisory,
+      selected_index=CURVE_ADVISORY_LEVELS.index(curve_advisory) if curve_advisory in CURVE_ADVISORY_LEVELS else 0,
+      icon="speed_limit.png",
+    )
+
     self._toggles = {}
     self._locked_toggles = set()
     for param, (title, desc, icon, needs_restart) in self._toggle_defs.items():
@@ -269,8 +290,10 @@ class TogglesLayout(Widget):
       if param == "DisengageOnAccelerator":
         self._toggles["LongitudinalPersonality"] = self._long_personality_setting
 
-      # group automatic lane change with the other lane related setting
+      # keep the curve warning with the other thing that only warns the driver, and group
+      # automatic lane change with the other lane related setting
       if param == "IsLdwEnabled":
+        self._toggles["CurveAdvisory"] = self._curve_advisory_setting
         self._toggles["AutoLaneChangeTimer"] = self._auto_lane_change_setting
 
       # the delay only means anything with the pause on, so keep it directly underneath
@@ -397,6 +420,9 @@ class TogglesLayout(Widget):
 
   def _set_blinker_pause_delay(self, button_index: int):
     self._params.put("BlinkerPauseDelay", BLINKER_PAUSE_DELAYS[button_index], block=True)
+
+  def _set_curve_advisory(self, button_index: int):
+    self._params.put("CurveAdvisory", CURVE_ADVISORY_LEVELS[button_index], block=True)
 
   def _set_longitudinal_personality(self, button_index: int):
     self._params.put("LongitudinalPersonality", button_index, block=True)

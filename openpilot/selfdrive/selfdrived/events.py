@@ -525,6 +525,18 @@ EVENTS: dict[int, dict[str, Alert | AlertCallbackType]] = {
       Priority.LOW, VisualAlert.ldw, AudibleAlert.prompt, 3.),
   },
 
+  # PERMANENT rather than WARNING: the speed carried into a bend is worth saying whether or
+  # not openpilot is steering, and WARNING alerts only show while it is active. silent by
+  # choice, since openpilot cannot slow this car and a chime for something only the driver
+  # can act on wears out fast
+  EventName.curveAdvisory: {
+    ET.PERMANENT: Alert(
+      "Slow Down for Curve Ahead",
+      "",
+      AlertStatus.userPrompt, AlertSize.small,
+      Priority.LOW, VisualAlert.none, AudibleAlert.none, 1.),
+  },
+
   # ********** events only containing alerts that display while engaged **********
 
   EventName.steerTempUnavailableSilent: {

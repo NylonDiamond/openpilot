@@ -18,6 +18,7 @@ from openpilot.common.swaglog import cloudlog
 from openpilot.common.gps import get_gps_location_service
 
 from openpilot.selfdrive.car.car_events import CarEvents
+from openpilot.selfdrive.controls.lib.curve_advisory import CurveAdvisory
 from openpilot.selfdrive.locationd.helpers import PoseCalibrator, Pose
 from openpilot.selfdrive.selfdrived.events import ALERT_CONTEXT, Events, ET
 from openpilot.selfdrive.selfdrived.helpers import ExcessiveActuationCheck
@@ -65,6 +66,7 @@ class SelfdriveD:
 
     self.pose_calibrator = PoseCalibrator()
     self.calibrated_pose: Pose | None = None
+    self.curve_advisory = CurveAdvisory()
     self.excessive_actuation_check = ExcessiveActuationCheck()
     self.excessive_actuation = self.params.get("Offroad_ExcessiveActuation") is not None
     self.big_model_loading = False
@@ -104,6 +106,7 @@ class SelfdriveD:
     self.disengage_on_accelerator = self.params.get_bool("DisengageOnAccelerator")
     self.car_events.reverse_gear_filter.enabled = self.params.get_bool("ReverseGearDebounce")
     ALERT_CONTEXT.auto_lane_change = self.params.get("AutoLaneChangeTimer", return_default=True) > 0
+    self.curve_advisory.level = self.params.get("CurveAdvisory", return_default=True)
 
     # read this off the car we actually booted with rather than the param, so it cannot
     # disagree with how the panda was configured
@@ -296,6 +299,12 @@ class SelfdriveD:
     if self.is_ldw_enabled and self.sm.valid['driverAssistance']:
       if self.sm['driverAssistance'].leftLaneDeparture or self.sm['driverAssistance'].rightLaneDeparture:
         self.events.add(EventName.ldw)
+
+    # Curve speed advisory. deliberately not gated on latActive, unlike the lane departure
+    # warning above: the speed carried into a bend is the driver's either way
+    if self.sm.valid['modelV2']:
+      if self.curve_advisory.update(self.sm['modelV2'], CS):
+        self.events.add(EventName.curveAdvisory)
 
     # ******************************************************************************************
     #  NOTE: To fork maintainers.
@@ -589,6 +598,7 @@ class SelfdriveD:
       self.disengage_on_accelerator = self.params.get_bool("DisengageOnAccelerator")
       self.car_events.reverse_gear_filter.enabled = self.params.get_bool("ReverseGearDebounce")
       ALERT_CONTEXT.auto_lane_change = self.params.get("AutoLaneChangeTimer", return_default=True) > 0
+      self.curve_advisory.level = self.params.get("CurveAdvisory", return_default=True)
       self.experimental_mode = self.params.get_bool("ExperimentalMode") and self.CP.openpilotLongitudinalControl
       self.personality = self.params.get("LongitudinalPersonality", return_default=True)
       time.sleep(0.1)
