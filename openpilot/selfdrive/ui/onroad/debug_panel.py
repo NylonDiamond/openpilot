@@ -220,6 +220,8 @@ class DebugPanel(Widget):
 
   def user_interacting(self) -> bool:
     """True when the road view should ignore the current touch."""
+    if not ui_state.show_debug_panel:
+      return False
     return self._open or self._consumed_press or self._button.is_pressed
 
   def _selected_index(self, param: str) -> int:
@@ -272,6 +274,11 @@ class DebugPanel(Widget):
     ))
 
   def _update_state(self) -> None:
+    # turning the toggle off mid-drive has to close the panel too, or it stays on screen with
+    # nothing left to dismiss it
+    if not ui_state.show_debug_panel:
+      self._open = False
+
     self._button.set_open(self._open)
     if not self._open:
       return
@@ -289,6 +296,8 @@ class DebugPanel(Widget):
 
   def _render(self, rect: rl.Rectangle) -> None:
     self._consumed_press = False
+    if not ui_state.show_debug_panel:
+      return
 
     if self._open:
       rl.draw_rectangle_rec(rect, SCRIM)
