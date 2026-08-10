@@ -1,10 +1,12 @@
+import math
 import unittest
 
 from openpilot.common.constants import CV
 from openpilot.common.realtime import DT_CTRL
 from openpilot.selfdrive.controls.lib.blinker_pause import (ANY_SPEED_MPH, BLINKER_PAUSE_SPEEDS_MPH,
                                                             BlinkerPause, MAX_RESUME_DELAY,
-                                                            RESUME_ANGLE_ERROR, RESUME_SETTLE_TIME)
+                                                            RESUME_CURVATURE_ERROR, RESUME_LAT_ACCEL,
+                                                            RESUME_SETTLE_TIME)
 from openpilot.selfdrive.controls.lib.desire_helper import LANE_CHANGE_SPEED_MIN
 
 # NOTE: plain unittest.TestCase on purpose. OpenpilotTestCase pulls in Params, which needs a
@@ -18,11 +20,23 @@ HIGHWAY_SPEED = PAUSE_SPEED + 10 * CV.MPH_TO_MS
 # mirrors the UI's BLINKER_PAUSE_DELAYS without importing it, since toggles.py pulls in raylib
 DELAY_OPTIONS = (0, 1, 2, 3)
 
-# the wheel where openpilot wants it, and the wheel still well into a turn. deliberately not
-# written in terms of RESUME_ANGLE_ERROR: a fixture that scales with the constant it is policing
-# cannot notice the constant growing wide enough to call a turn finished
+MOTORWAY_SPEED = 70 * CV.MPH_TO_MS
+
+
+def wheel_deg(deg):
+  """The curvature a wheel angle works out at on this car, near enough for a fixture."""
+  return math.radians(deg) / (13.0 * 2.5781)  # steerRatio, wheelbase
+
+
+# openpilot's line and the driver's, agreeing and then well apart. deliberately not written in
+# terms of RESUME_CURVATURE_ERROR: a fixture that scales with the constant it is policing cannot
+# notice the constant growing wide enough to call a turn finished
 AGREED = 0.0
-TURNING = 45.0
+TURNING = wheel_deg(45)
+
+# a motorway lane change is only a couple of degrees of wheel, well inside the curvature limit.
+# the only thing that separates it from a straight road is what it costs at speed
+LANE_CHANGE = wheel_deg(3)
 
 # frames of either side of a deadline to leave alone. the timers accumulate DT_CTRL, so 500 steps
 # reach 4.999999999999938 rather than 5, and a frame exact assertion is testing float noise
@@ -39,10 +53,10 @@ class TestBlinkerPause(unittest.TestCase):
     self.BP.max_speed = PAUSE_SPEED
     self.BP.resume_delay = 1.0
 
-  def step(self, one_blinker, v_ego=TURN_SPEED, steps=1, lat_active=True, angle_error=AGREED):
+  def step(self, one_blinker, v_ego=TURN_SPEED, steps=1, lat_active=True, curvature_error=AGREED):
     paused = False
     for _ in range(steps):
-      paused = self.BP.update(lat_active, one_blinker, v_ego, angle_error)
+      paused = self.BP.update(lat_active, one_blinker, v_ego, curvature_error)
     return paused
 
   def pause(self):
@@ -118,7 +132,7 @@ class TestBlinkerPause(unittest.TestCase):
 
   def test_a_cranked_wheel_does_not_hold_the_pause_open_while_signaling(self):
     # the wheel is always turned mid turn, and the signal is what holds the pause until it cancels
-    self.assertTrue(self.step(True, steps=seconds_to_steps(2), angle_error=TURNING))
+    self.assertTrue(self.step(True, steps=seconds_to_steps(2), curvature_error=TURNING))
 
   # resuming on the clock
 
@@ -163,50 +177,76 @@ class TestBlinkerPause(unittest.TestCase):
 
   def test_a_wheel_still_in_the_turn_holds_steering_past_the_delay(self):
     self.pause()
-    self.assertTrue(self.step(False, steps=seconds_to_steps(3), angle_error=TURNING), "resumed mid turn")
+    self.assertTrue(self.step(False, steps=seconds_to_steps(3), curvature_error=TURNING), "resumed mid turn")
 
   def test_steering_comes_back_once_the_wheel_catches_up(self):
     self.pause()
-    self.assertTrue(self.step(False, steps=seconds_to_steps(3), angle_error=TURNING))
+    self.assertTrue(self.step(False, steps=seconds_to_steps(3), curvature_error=TURNING))
     self.assertTrue(self.step(False, steps=seconds_to_steps(RESUME_SETTLE_TIME) - SLACK), "resumed early")
     self.assertFalse(self.step(False, steps=2 * SLACK), "never resumed")
 
   def test_the_direction_of_the_error_does_not_matter(self):
-    for angle_error in (TURNING, -TURNING):
-      with self.subTest(angle_error=angle_error):
+    for error in (TURNING, -TURNING):
+      with self.subTest(curvature_error=error):
         self.setUp()
         self.pause()
-        self.assertTrue(self.step(False, steps=seconds_to_steps(3), angle_error=angle_error))
+        self.assertTrue(self.step(False, steps=seconds_to_steps(3), curvature_error=error))
 
   def test_the_threshold_is_narrower_than_a_turn(self):
     # a junction at 10 m radius is about 190 degrees of wheel on this car, and even its tail is
     # tens of degrees. a threshold up near that would call every turn finished the moment it began
-    self.assertLess(RESUME_ANGLE_ERROR, TURNING / 4)
+    self.assertLess(RESUME_CURVATURE_ERROR, TURNING / 4)
+
+  # the same gap costs four times as much at twice the speed, and the pause now reaches motorway
+  # speeds, so what counts as the turn being over cannot be a curvature on its own
+
+  def test_a_motorway_lane_change_is_not_a_finished_turn(self):
+    self.BP.max_speed = ANY_SPEED_MPH * CV.MPH_TO_MS
+    self.assertLess(abs(LANE_CHANGE), RESUME_CURVATURE_ERROR, "fixture no longer tests the accel limit")
+
+    self.step(True, v_ego=MOTORWAY_SPEED, steps=seconds_to_steps(2))
+    self.assertTrue(self.step(False, v_ego=MOTORWAY_SPEED, steps=seconds_to_steps(3), curvature_error=LANE_CHANGE),
+                    "handed the wheel back mid lane change")
+
+  def test_the_same_gap_is_a_finished_turn_in_town(self):
+    # the pair to the test above. identical curvature, a quarter of the speed, and now it is
+    # nothing, so the difference is the speed rather than the number
+    self.pause()
+    self.assertFalse(self.step(False, steps=seconds_to_steps(self.BP.resume_delay) + SLACK, curvature_error=LANE_CHANGE))
+
+  def test_a_turn_at_walking_pace_is_still_a_turn(self):
+    # down here the acceleration limit waves everything through, so the curvature limit is the
+    # only thing left holding the wheel through a junction
+    crawl = 2.0
+    self.assertLess(abs(TURNING) * crawl ** 2, RESUME_LAT_ACCEL, "fixture no longer tests the curvature limit")
+
+    self.step(True, v_ego=crawl, steps=seconds_to_steps(2))
+    self.assertTrue(self.step(False, v_ego=crawl, steps=seconds_to_steps(3), curvature_error=TURNING))
 
   def test_the_wheel_only_has_to_be_close(self):
     # exactly on the threshold counts, so the constant means what it reads as
     self.pause()
     steps = seconds_to_steps(self.BP.resume_delay) + SLACK
-    self.assertFalse(self.step(False, steps=steps, angle_error=RESUME_ANGLE_ERROR))
+    self.assertFalse(self.step(False, steps=steps, curvature_error=RESUME_CURVATURE_ERROR))
 
   def test_a_moment_of_agreement_is_not_enough(self):
     # modelV2 lands at 20 Hz against this loop's 100, so the error crossing the threshold for an
     # instant says nothing. only the wheel sitting there does
     self.pause()
     for _ in range(20):
-      self.assertTrue(self.step(False, steps=seconds_to_steps(RESUME_SETTLE_TIME) - SLACK, angle_error=AGREED))
-      self.assertTrue(self.step(False, steps=SLACK, angle_error=TURNING))
+      self.assertTrue(self.step(False, steps=seconds_to_steps(RESUME_SETTLE_TIME) - SLACK, curvature_error=AGREED))
+      self.assertTrue(self.step(False, steps=SLACK, curvature_error=TURNING))
 
   def test_the_wait_is_capped(self):
     # a model that never agrees with the driver must not sit on the steering forever
     self.pause()
-    self.assertTrue(self.step(False, steps=seconds_to_steps(MAX_RESUME_DELAY) - SLACK, angle_error=TURNING), "gave up early")
-    self.assertFalse(self.step(False, steps=2 * SLACK, angle_error=TURNING), "never gave up")
+    self.assertTrue(self.step(False, steps=seconds_to_steps(MAX_RESUME_DELAY) - SLACK, curvature_error=TURNING), "gave up early")
+    self.assertFalse(self.step(False, steps=2 * SLACK, curvature_error=TURNING), "never gave up")
 
   def test_no_model_falls_back_to_the_delay_alone(self):
     self.pause()
-    self.assertTrue(self.step(False, steps=seconds_to_steps(self.BP.resume_delay) - SLACK, angle_error=None), "resumed early")
-    self.assertFalse(self.step(False, steps=2 * SLACK, angle_error=None), "never resumed")
+    self.assertTrue(self.step(False, steps=seconds_to_steps(self.BP.resume_delay) - SLACK, curvature_error=None), "resumed early")
+    self.assertFalse(self.step(False, steps=2 * SLACK, curvature_error=None), "never resumed")
 
   # a real disengage must not leave a half spent timer behind
 

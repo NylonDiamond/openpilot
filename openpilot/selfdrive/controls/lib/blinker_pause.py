@@ -9,10 +9,17 @@ ANY_SPEED_MPH = 200
 # collide with the lane change assist
 BLINKER_PAUSE_SPEEDS_MPH = (0, 20, 40, ANY_SPEED_MPH)
 
-# degrees at the wheel. how close the driver's steering has to be to openpilot's before handing
-# the wheel back is a no-op. latcontrol_angle treats 2.5 as the point where its own command counts
-# as met, and this sits looser than that because the model is only being watched here, not followed
-RESUME_ANGLE_ERROR = 5.0
+# 1/m. how close the driver's line has to be to openpilot's before handing the wheel back is a
+# no-op. about 5 degrees of wheel on this car, twice what latcontrol_angle calls its own command
+# met, because the model is only being watched here rather than followed
+RESUME_CURVATURE_ERROR = 0.0025
+
+# m/s^2. the same gap in curvature is felt four times as hard at twice the speed, so how close the
+# two lines are is only half the question. 5 degrees of wheel is 0.11 m/s2 at 15 mph and 1.56 at
+# 70, so on curvature alone the check is fourteen times looser on the motorway than in town. A
+# motorway lane change is only two or three degrees of wheel and must not read as a finished turn,
+# which is what this catches. Below about 25 mph the curvature limit above is the binding one
+RESUME_LAT_ACCEL = 0.5
 
 # seconds the two have to agree for. modelV2 arrives at 20 Hz and this loop runs at 100, so a bare
 # threshold test flickers across the boundary on a road with any texture to it
@@ -50,7 +57,9 @@ class BlinkerPause:
   difference at the ISO jerk limit, which at 10 m/s is a fifth of a turn of the wheel per
   second, straight against the driver. Instead the pause holds until openpilot's steering and
   the driver's agree, at which point taking the wheel back costs nothing. The configured delay
-  becomes the floor on that wait and MAX_RESUME_DELAY the ceiling.
+  becomes the floor on that wait and MAX_RESUME_DELAY the ceiling. What counts as agreeing is
+  bounded by acceleration as well as by curvature, so the same test means the same thing at every
+  speed the pause can now be set to reach.
   """
 
   def __init__(self):
@@ -62,7 +71,7 @@ class BlinkerPause:
     self.resume_timer = 0.0
     self.settle_timer = 0.0
 
-  def update(self, lat_active: bool, one_blinker: bool, v_ego: float, angle_error_deg: float | None) -> bool:
+  def update(self, lat_active: bool, one_blinker: bool, v_ego: float, curvature_error: float | None) -> bool:
     """True while steering should stay paused.
 
     lat_active is what latActive would be without this, so anything that ends lateral for a
@@ -72,8 +81,8 @@ class BlinkerPause:
     max_speed is in m/s and 0 turns the whole thing off, so the owner converts the setting once
     rather than this comparing mph against a vEgo.
 
-    angle_error_deg is how far the wheel sits from where openpilot would be holding it, or None
-    when there is no model to ask.
+    curvature_error is how far the driver's line sits from the one openpilot would be steering,
+    or None when there is no model to ask.
     """
     if not (self.max_speed > 0.0 and lat_active):
       self.paused = False
@@ -88,11 +97,11 @@ class BlinkerPause:
     elif self.paused:
       self.resume_timer += DT_CTRL
 
-      if angle_error_deg is None:
+      if curvature_error is None:
         # no model, no opinion. fall back to the delay on its own rather than hold the steering
-        # off against an angle nothing is updating
+        # off against a number nothing is updating
         self.settle_timer = RESUME_SETTLE_TIME
-      elif abs(angle_error_deg) <= RESUME_ANGLE_ERROR:
+      elif abs(curvature_error) <= RESUME_CURVATURE_ERROR and abs(curvature_error) * v_ego ** 2 <= RESUME_LAT_ACCEL:
         self.settle_timer += DT_CTRL
       else:
         self.settle_timer = 0.0
