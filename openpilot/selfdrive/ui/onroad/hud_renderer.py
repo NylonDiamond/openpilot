@@ -128,6 +128,10 @@ class HudRenderer(Widget):
     # a dead target that still swallows touches in that corner
     return ui_state.hide_experimental_button and not ui_state.has_longitudinal_control
 
+  def set_input_blocked(self, blocked: bool) -> None:
+    """Stop the experimental button taking touches while something is drawn over it."""
+    self._exp_button.set_enabled(not blocked)
+
   def user_interacting(self) -> bool:
     return not self._exp_button_hidden() and self._exp_button.is_pressed
 
