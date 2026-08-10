@@ -8,6 +8,7 @@ from openpilot.system.ui.lib.application import gui_app
 from openpilot.system.ui.lib.multilang import tr, tr_noop
 from openpilot.system.ui.widgets import DialogResult
 from openpilot.selfdrive.ui.ui_state import ui_state
+from openpilot.selfdrive.controls.lib.lane_position import LANE_POSITION_OFFSETS_CM
 
 PERSONALITY_TO_INT = log.LongitudinalPersonality.schema.enumerants
 
@@ -62,6 +63,12 @@ DESCRIPTIONS = {
     "EyeSight holds its set speed through a bend, so nothing in the car says anything about this today. " +
     "The warning is silent and openpilot cannot slow this car, so acting on it is entirely up to you. " +
     "Late warns only about the sharpest curves, Early warns about gentler ones too."
+  ),
+  "LanePosition": tr_noop(
+    "Where in the lane openpilot places the car. Centered is how it drives today. " +
+    "The other positions move it toward one side, which helps on a narrow lane with a truck alongside, " +
+    "or on a road where the crown or the camber puts you closer to one line than you would like. " +
+    "It eases across over about half a second when steering engages, and returns to centered when it disengages."
   ),
   "MadsEnabled": tr_noop(
     "Keep steering active when adaptive cruise drops out. Steering starts the first time you engage cruise, " +
@@ -257,6 +264,17 @@ class TogglesLayout(Widget):
       icon="speed_limit.png",
     )
 
+    lane_position = self._params.get("LanePosition", return_default=True)
+    self._lane_position_setting = multiple_button_item(
+      lambda: tr("Lane Position"),
+      lambda: tr(DESCRIPTIONS["LanePosition"]),
+      buttons=[lambda: tr("Far Left"), lambda: tr("Left"), lambda: tr("Center"), lambda: tr("Right"), lambda: tr("Far Right")],
+      button_width=160,
+      callback=self._set_lane_position,
+      selected_index=LANE_POSITION_OFFSETS_CM.index(lane_position) if lane_position in LANE_POSITION_OFFSETS_CM else 2,
+      icon="road.png",
+    )
+
     self._toggles = {}
     self._locked_toggles = set()
     for param, (title, desc, icon, needs_restart) in self._toggle_defs.items():
@@ -294,6 +312,7 @@ class TogglesLayout(Widget):
       # automatic lane change with the other lane related setting
       if param == "IsLdwEnabled":
         self._toggles["CurveAdvisory"] = self._curve_advisory_setting
+        self._toggles["LanePosition"] = self._lane_position_setting
         self._toggles["AutoLaneChangeTimer"] = self._auto_lane_change_setting
 
       # the delay only means anything with the pause on, so keep it directly underneath
@@ -420,6 +439,9 @@ class TogglesLayout(Widget):
 
   def _set_blinker_pause_delay(self, button_index: int):
     self._params.put("BlinkerPauseDelay", BLINKER_PAUSE_DELAYS[button_index], block=True)
+
+  def _set_lane_position(self, button_index: int):
+    self._params.put("LanePosition", LANE_POSITION_OFFSETS_CM[button_index], block=True)
 
   def _set_curve_advisory(self, button_index: int):
     self._params.put("CurveAdvisory", CURVE_ADVISORY_LEVELS[button_index], block=True)

@@ -22,8 +22,9 @@ from openpilot.common.filter_simple import FirstOrderFilter
 from openpilot.common.realtime import config_realtime_process, DT_MDL
 from openpilot.common.transformations.camera import DEVICE_CAMERAS
 from openpilot.system.camerad.cameras.nv12_info import get_nv12_info
-from openpilot.common.transformations.model import get_warp_matrix
+from openpilot.common.transformations.model import get_warp_matrix, medmodel_intrinsics, sbigmodel_intrinsics
 from openpilot.selfdrive.controls.lib.desire_helper import DesireHelper
+from openpilot.selfdrive.controls.lib.lane_position import LanePosition, DEFAULT_CAMERA_HEIGHT
 from openpilot.selfdrive.controls.lib.drive_helpers import get_accel_from_plan, should_stop, smooth_value, get_curvature_from_plan
 from openpilot.selfdrive.modeld.parse_model_outputs import Parser
 from openpilot.selfdrive.modeld.compile_modeld import make_input_queues, WARP_INPUTS, POLICY_INPUTS
@@ -276,6 +277,11 @@ def main(demo=False):
 
   model_transform_main = np.zeros((3, 3), dtype=np.float32)
   model_transform_extra = np.zeros((3, 3), dtype=np.float32)
+  # the transforms the lane position offset is sheared onto, kept apart so the offset is never
+  # applied on top of itself
+  base_transform_main = np.zeros((3, 3), dtype=np.float32)
+  base_transform_extra = np.zeros((3, 3), dtype=np.float32)
+  camera_height = DEFAULT_CAMERA_HEIGHT
   extrinsics_calibration_seen = False
   buf_main, buf_extra = None, None
   meta_main = FrameMeta()
@@ -293,6 +299,7 @@ def main(demo=False):
   prev_action = log.ModelDataV2.Action()
 
   DH = DesireHelper()
+  LP = LanePosition()
 
   while True:
     # Keep receiving frames until we are at least 1 frame ahead of previous extra frame
@@ -337,11 +344,19 @@ def main(demo=False):
       device_from_calib_euler = np.array(sm["extrinsicsCalibration"].rpyCalib, dtype=np.float32)
       dc = DEVICE_CAMERAS[(str(sm['deviceState'].deviceType), str(sm['narrowRoadCameraState'].sensor))]
       main_intrinsics = dc.wide_road.intrinsics if main_wide_camera else dc.narrow_road.intrinsics
-      model_transform_main = get_warp_matrix(device_from_calib_euler, main_intrinsics, False).astype(np.float32)
+      base_transform_main = get_warp_matrix(device_from_calib_euler, main_intrinsics, False).astype(np.float32)
       has_wide_camera = use_extra_client or main_wide_camera
       extra_intrinsics = dc.wide_road.intrinsics if has_wide_camera else dc.narrow_road.intrinsics
-      model_transform_extra = get_warp_matrix(device_from_calib_euler, extra_intrinsics, True).astype(np.float32)
+      base_transform_extra = get_warp_matrix(device_from_calib_euler, extra_intrinsics, True).astype(np.float32)
+      calib_height = sm["extrinsicsCalibration"].height
+      camera_height = calib_height[0] if len(calib_height) else DEFAULT_CAMERA_HEIGHT
       extrinsics_calibration_seen = True
+
+    # shear the stored transforms every frame rather than inside the block above. extrinsicsCalibration
+    # only publishes at 4 Hz, and the offset has to ease in smoothly at the model's own rate
+    LP.update(sm['carControl'].latActive)
+    model_transform_main = LP.warp(base_transform_main, medmodel_intrinsics, camera_height)
+    model_transform_extra = LP.warp(base_transform_extra, sbigmodel_intrinsics, camera_height)
 
     traffic_convention = np.zeros(2)
     traffic_convention[int(is_rhd)] = 1
@@ -405,6 +420,7 @@ def main(demo=False):
       lane_change_prob = l_lane_change_prob + r_lane_change_prob
       if frame_id % 20 == 0:  # ~1Hz, the model loop is too hot to read a param every frame
         DH.auto_lane_change_delay = params.get("AutoLaneChangeTimer", return_default=True)
+        LP.set_target_cm(params.get("LanePosition", return_default=True))
       DH.update(sm['carState'], sm['carControl'].latActive, lane_change_prob)
       modelv2_send.modelV2.meta.laneChangeState = DH.lane_change_state
       modelv2_send.modelV2.meta.laneChangeDirection = DH.lane_change_direction
