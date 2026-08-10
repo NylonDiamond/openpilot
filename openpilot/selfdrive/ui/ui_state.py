@@ -111,6 +111,9 @@ class UIState:
     self.show_lead_indicator: bool = self.params.get_bool("ShowLeadIndicator")
     self.engagement_path_color: bool = self.params.get_bool("EngagementPathColor")
     self.hide_experimental_button: bool = self.params.get_bool("HideExperimentalButton")
+    # show the wide camera at low speed. stock openpilot does this too, but only in experimental mode,
+    # which needs longitudinal control this car cannot have.
+    self.wide_camera_low_speed: bool = self.params.get_bool("WideCameraLowSpeed")
     self.is_body: bool | None = False
     self.CP: car.CarParams | None = None
     self.light_sensor: float = -1.0
@@ -259,6 +262,7 @@ class UIState:
     self.show_lead_indicator = self.params.get_bool("ShowLeadIndicator")
     self.engagement_path_color = self.params.get_bool("EngagementPathColor")
     self.hide_experimental_button = self.params.get_bool("HideExperimentalButton")
+    self.wide_camera_low_speed = self.params.get_bool("WideCameraLowSpeed")
     self.chestnut_active = self.params.get("ChestnutActive")
     self.chestnut_loading = self.params.get_bool("ChestnutLoading")
     self.chestnut_alert = any(self.params.get(k) is not None for k, a in OFFROAD_ALERTS.items() if k.startswith("Offroad_Chestnut") and a["severity"] >= 0)
