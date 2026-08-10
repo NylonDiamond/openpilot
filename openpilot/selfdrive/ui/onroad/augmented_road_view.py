@@ -6,6 +6,7 @@ from openpilot.selfdrive.ui import UI_BORDER_SIZE
 from openpilot.selfdrive.ui.ui_state import ui_state, UIStatus
 from openpilot.selfdrive.ui.onroad.alert_renderer import AlertRenderer
 from openpilot.selfdrive.ui.onroad.car_indicators import CarIndicators
+from openpilot.selfdrive.ui.onroad.debug_panel import DebugPanel
 from openpilot.selfdrive.ui.onroad.driver_state import DriverStateRenderer
 from openpilot.selfdrive.ui.onroad.hud_renderer import HudRenderer
 from openpilot.selfdrive.ui.onroad.model_renderer import ModelRenderer
@@ -49,6 +50,7 @@ class AugmentedRoadView(CameraView):
     self.alert_renderer = AlertRenderer()
     self.driver_state_renderer = DriverStateRenderer()
     self.car_indicators = CarIndicators()
+    self.debug_panel = DebugPanel()
 
   def _render(self, rect):
     # Only render when system is started to avoid invalid data access
@@ -82,6 +84,8 @@ class AugmentedRoadView(CameraView):
 
     # Draw all UI overlays
     self.model_renderer.render(self._content_rect)
+    # the debug panel covers the corner the experimental button lives in, so hand it the touches
+    self._hud_renderer.set_input_blocked(self.debug_panel.is_open)
     self._hud_renderer.render(self._content_rect)
     self.alert_renderer.render(self._content_rect)
     self.driver_state_renderer.render(self._content_rect)
@@ -89,6 +93,8 @@ class AugmentedRoadView(CameraView):
     # Custom UI extension point - add custom overlays here
     # Use self._content_rect for positioning within camera bounds
     self.car_indicators.render(self._content_rect)
+    # last, so its overlay sits on top of everything else on the driving screen
+    self.debug_panel.render(self._content_rect)
 
     # End clipping region
     rl.end_scissor_mode()
@@ -97,7 +103,9 @@ class AugmentedRoadView(CameraView):
     self._draw_border(rect)
 
   def _handle_mouse_press(self, _):
-    if not self._hud_renderer.user_interacting() and self._click_callback is not None:
+    if self._hud_renderer.user_interacting() or self.debug_panel.user_interacting():
+      return
+    if self._click_callback is not None:
       self._click_callback()
 
   def _handle_mouse_release(self, _):
