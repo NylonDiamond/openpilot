@@ -1,12 +1,10 @@
 import time
 import pyray as rl
-from collections.abc import Callable
 from enum import IntEnum
 from openpilot.common.params import Params
 from openpilot.selfdrive.ui.widgets.offroad_alerts import UpdateAlert, OffroadAlert
-from openpilot.selfdrive.ui.widgets.exp_mode_button import ExperimentalModeButton
-from openpilot.selfdrive.ui.widgets.prime import PrimeWidget
-from openpilot.selfdrive.ui.widgets.setup import SetupWidget
+from openpilot.selfdrive.ui.widgets.settings_grid import DRIVING_PARAMS, SettingsGrid
+from openpilot.selfdrive.ui.widgets.status_board import StatusBoard
 from openpilot.system.ui.lib.text_measure import measure_text_cached
 from openpilot.system.ui.lib.application import gui_app, FontWeight, MousePos
 from openpilot.system.ui.lib.multilang import tr, trn
@@ -19,6 +17,11 @@ CONTENT_MARGIN = 40
 SPACING = 25
 RIGHT_COLUMN_WIDTH = 750
 REFRESH_INTERVAL = 10.0
+
+# the settings grid is one column here, so every driving setting has to fit down the page
+SETTINGS_ROW_HEIGHT = 88
+COLUMN_TITLE_HEIGHT = 66
+COLUMN_TITLE_FONT_SIZE = 44
 
 
 class HomeLayoutState(IntEnum):
@@ -39,7 +42,6 @@ class HomeLayout(Widget):
 
     self.current_state = HomeLayoutState.HOME
     self.last_refresh = 0
-    self.settings_callback: Callable[[], None] | None = None
 
     self.update_available = False
     self.alert_count = 0
@@ -55,31 +57,27 @@ class HomeLayout(Widget):
     self.update_notif_rect = rl.Rectangle(0, 0, 200, HEADER_HEIGHT - 10)
     self.alert_notif_rect = rl.Rectangle(0, 0, 220, HEADER_HEIGHT - 10)
 
-    self._prime_widget = PrimeWidget()
-    self._setup_widget = SetupWidget()
-
-    self._exp_mode_button = ExperimentalModeButton()
+    # the home screen is where a drive gets set up, so it carries what changes how the car
+    # drives. the rest of the settings stay one tap away in the overlay and in the menu.
+    self._settings_grid = self._child(SettingsGrid(DRIVING_PARAMS, len(DRIVING_PARAMS), SETTINGS_ROW_HEIGHT))
+    self._status_board = self._child(StatusBoard())
     self._setup_callbacks()
 
   def show_event(self):
     super().show_event()
-    self._exp_mode_button.show_event()
     self.last_refresh = time.monotonic()
     self._refresh()
 
   def _setup_callbacks(self):
     self.update_alert.set_dismiss_callback(lambda: self._set_state(HomeLayoutState.HOME))
     self.offroad_alert.set_dismiss_callback(lambda: self._set_state(HomeLayoutState.HOME))
-    self._exp_mode_button.set_click_callback(lambda: self.settings_callback() if self.settings_callback else None)
-
-  def set_settings_callback(self, callback: Callable):
-    self.settings_callback = callback
 
   def _set_state(self, state: HomeLayoutState):
     # propagate show/hide events
     if state != self.current_state:
       if state == HomeLayoutState.HOME:
-        self._exp_mode_button.show_event()
+        self._settings_grid.refresh()
+        self._status_board.refresh()
 
       if state in self._layout_widgets:
         self._layout_widgets[state].show_event()
@@ -191,25 +189,20 @@ class HomeLayout(Widget):
     self.offroad_alert.render(self.content_rect)
 
   def _render_left_column(self):
-    self._prime_widget.render(self.left_column_rect)
+    rect = self.left_column_rect
+    gui_label(rl.Rectangle(rect.x, rect.y, rect.width, COLUMN_TITLE_HEIGHT), tr("SETTINGS"),
+              COLUMN_TITLE_FONT_SIZE, font_weight=FontWeight.BOLD)
+    grid_rect = rl.Rectangle(rect.x, rect.y + COLUMN_TITLE_HEIGHT, rect.width,
+                             rect.height - COLUMN_TITLE_HEIGHT)
+    self._settings_grid.render(grid_rect)
 
   def _render_right_column(self):
-    exp_height = 125
-    exp_rect = rl.Rectangle(
-      self.right_column_rect.x, self.right_column_rect.y, self.right_column_rect.width, exp_height
-    )
-    self._exp_mode_button.render(exp_rect)
-
-    setup_rect = rl.Rectangle(
-      self.right_column_rect.x,
-      self.right_column_rect.y + exp_height + SPACING,
-      self.right_column_rect.width,
-      self.right_column_rect.height - exp_height - SPACING,
-    )
-    self._setup_widget.render(setup_rect)
+    self._status_board.render(self.right_column_rect)
 
   def _refresh(self):
     self._version_text = self._get_version_text()
+    self._settings_grid.refresh()
+    self._status_board.refresh()
     update_available = self.update_alert.refresh()
     alert_count = self.offroad_alert.refresh()
     alerts_present = alert_count > 0
