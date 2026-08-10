@@ -113,6 +113,12 @@ DESCRIPTIONS = {
     "This only changes the picture on screen. The driving model reads both cameras at every speed either way. " +
     "openpilot normally does this only in experimental mode, which this car cannot use."
   ),
+  "ShowDebugPanel": tr_noop(
+    "Put a button on the driving screen that opens these settings over the camera. " +
+    "It saves leaving the road view to change one thing and coming back, which is the only way to judge " +
+    "a setting against the piece of road that raised the question. " +
+    "Turn it off to get the corner of the screen back once the testing is done."
+  ),
   "AlwaysOnDM": tr_noop("Enable driver monitoring even when openpilot is not engaged."),
   'RecordFront': tr_noop("Upload data from the cabin camera and help improve the driver monitoring algorithm."),
   "IsMetric": tr_noop("Display speed in km/h instead of mph."),
@@ -194,6 +200,12 @@ class TogglesLayout(Widget):
         lambda: tr("Wide Camera At Low Speed"),
         DESCRIPTIONS["WideCameraLowSpeed"],
         "road.png",
+        False,
+      ),
+      "ShowDebugPanel": (
+        lambda: tr("Settings Button While Driving"),
+        DESCRIPTIONS["ShowDebugPanel"],
+        "settings.png",
         False,
       ),
       "AlwaysOnDM": (
