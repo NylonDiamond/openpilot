@@ -853,6 +853,14 @@ EVENTS: dict[int, dict[str, Alert | AlertCallbackType]] = {
     ET.NO_ENTRY: NoEntryAlert("Gear not D"),
   },
 
+  # Shifting out of drive at a standstill is someone parking, not something they need to be
+  # shouted at about. The soft disable countdown escalates to the critical alert in its last
+  # half second, which is a siren every time the car gets put away.
+  EventName.wrongGearStopped: {
+    ET.USER_DISABLE: EngagementAlert(AudibleAlert.disengage),
+    ET.NO_ENTRY: NoEntryAlert("Gear not D"),
+  },
+
   # This alert is thrown when the calibration angles are outside of the acceptable range.
   # For example if the device is pointed too much to the left or the right.
   # Usually this can only be solved by removing the mount from the windshield completely,

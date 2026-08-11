@@ -112,7 +112,9 @@ class CarEvents:
     if CS.seatbeltUnlatched:
       events.add(EventName.seatbeltNotLatched)
     if CS.gearShifter != GearShifter.drive and CS.gearShifter not in CI.DRIVABLE_GEARS:
-      events.add(EventName.wrongGear)
+      # a gear change at a standstill is the driver parking, so disengage the way a cancel
+      # would. Keep the escalating soft disable for a gear leaving D while still rolling.
+      events.add(EventName.wrongGearStopped if CS.standstill else EventName.wrongGear)
     if self.reverse_gear_filter.update(CS.gearShifter == GearShifter.reverse):
       events.add(EventName.reverseGear)
     if not CS.cruiseState.available:
