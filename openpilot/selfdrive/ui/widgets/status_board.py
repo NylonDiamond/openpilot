@@ -41,6 +41,7 @@ WARM_TEMP_C = 75.0
 LOW_SPACE_PERCENT = 10.0
 
 CALIBRATED = log.ExtrinsicsCalibration.Status.calibrated
+LAG_ESTIMATED = log.LateralDelay.Status.estimated
 
 
 def _pretty_fingerprint(fingerprint: str) -> str:
@@ -59,6 +60,8 @@ class StatusBoard(Widget):
     self._last_refresh = 0.0
     self._calibration = ""
     self._calibration_ok = False
+    self._steer_lag = ""
+    self._steer_lag_ok = False
     self._route_count = ""
     self.refresh()
 
@@ -69,6 +72,7 @@ class StatusBoard(Widget):
   def refresh(self) -> None:
     self._last_refresh = time.monotonic()
     self._calibration, self._calibration_ok = self._read_calibration()
+    self._steer_lag, self._steer_lag_ok = self._read_steer_lag()
     routes = self._params.get("RouteCount", return_default=True)
     self._route_count = str(routes) if routes is not None else "unknown"
 
@@ -92,6 +96,25 @@ class StatusBoard(Widget):
     yaw_text = f"{abs(yaw):.1f} deg {'left' if yaw > 0 else 'right'}"
     return f"{pitch_text}, {yaw_text}", True
 
+  def _read_steer_lag(self) -> tuple[str, bool]:
+    # CarParams.steerActuatorDelay is only lagd's seed, so it is not what the car is steering
+    # on. The learned value is, and it is worth seeing whether it has been measured yet.
+    lag_bytes = self._params.get("LiveDelay")
+    if not lag_bytes:
+      return "not measured", False
+
+    try:
+      lag = messaging.log_from_bytes(lag_bytes, log.Event).lateralDelay
+    except Exception:
+      cloudlog.exception("invalid LiveDelay")
+      return "unreadable", False
+
+    # the value it reports before it has estimated is a fallback, not a measurement, so
+    # showing that number would read as though the car had been measured when it has not
+    if lag.status != LAG_ESTIMATED:
+      return "measuring", False
+    return f"{lag.lateralDelay:.2f} s", True
+
   def _update_state(self) -> None:
     if time.monotonic() - self._last_refresh >= REFRESH_INTERVAL:
       self.refresh()
@@ -106,7 +129,8 @@ class StatusBoard(Widget):
     else:
       car_rows.append(("", _pretty_fingerprint(CP.carFingerprint), VALUE_COLOR))
       car_rows.append(("geometry", f"{CP.wheelbase:.2f} m, ratio {CP.steerRatio:.1f}", VALUE_COLOR))
-      car_rows.append(("mass, delay", f"{CP.mass:.0f} kg, {CP.steerActuatorDelay:.2f} s", VALUE_COLOR))
+      car_rows.append(("mass", f"{CP.mass:.0f} kg", VALUE_COLOR))
+      car_rows.append(("steering lag", self._steer_lag, GOOD_COLOR if self._steer_lag_ok else WARN_COLOR))
 
     calib_rows = [("", self._calibration, GOOD_COLOR if self._calibration_ok else WARN_COLOR)]
 
