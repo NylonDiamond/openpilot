@@ -130,14 +130,25 @@ class StatusBoard(Widget):
 
     return [("CAR", car_rows), ("CALIBRATION", calib_rows), ("PANDA", panda_rows), ("DEVICE", device_rows)]
 
+  @staticmethod
+  def _content_height(sections: list[tuple[str, list[tuple[str, str, rl.Color]]]]) -> float:
+    height = 2 * PADDING + SECTION_GAP * (len(sections) - 1)
+    for _, rows in sections:
+      height += SECTION_HEADER_HEIGHT + len(rows) * ROW_HEIGHT
+    return height
+
   def _render(self, rect: rl.Rectangle) -> None:
+    sections = self._sections()
+
+    # hug the rows rather than stretching to the column, so the panel does not read as
+    # a mostly empty box when the car has fewer things to say
+    rect = rl.Rectangle(rect.x, rect.y, rect.width, min(rect.height, self._content_height(sections)))
     rl.draw_rectangle_rounded(rect, 0.03, 20, BG_COLOR)
 
     x = rect.x + PADDING
     y = rect.y + PADDING
     width = rect.width - 2 * PADDING
 
-    sections = self._sections()
     for index, (title, rows) in enumerate(sections):
       rl.draw_text_ex(self._font_bold, title, rl.Vector2(x, y), SECTION_FONT_SIZE, 0, SECTION_COLOR)
       y += SECTION_HEADER_HEIGHT

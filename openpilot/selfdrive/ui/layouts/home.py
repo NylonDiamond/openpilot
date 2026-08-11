@@ -15,7 +15,9 @@ HEADER_HEIGHT = 80
 HEAD_BUTTON_FONT_SIZE = 40
 CONTENT_MARGIN = 40
 SPACING = 25
-RIGHT_COLUMN_WIDTH = 750
+# the status board's widest row is "mass, delay" at 517 px, so this leaves it a 60 px gap
+# between key and value and hands the rest of the width to the settings
+RIGHT_COLUMN_WIDTH = 640
 REFRESH_INTERVAL = 10.0
 
 # the settings grid is one column here, so every driving setting has to fit down the page
