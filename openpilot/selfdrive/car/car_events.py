@@ -109,8 +109,9 @@ class CarEvents:
 
     if CS.doorOpen:
       events.add(EventName.doorOpen)
-    if CS.seatbeltUnlatched:
-      events.add(EventName.seatbeltNotLatched)
+    # The seatbelt is the car's business, and it already has a chime for it. This was a soft
+    # disable, so unbuckling after a drive ended on the siren. carState.seatbeltUnlatched is
+    # still logged, there is just no event raised off it.
     if CS.gearShifter != GearShifter.drive and CS.gearShifter not in CI.DRIVABLE_GEARS:
       # a gear change at a standstill is the driver parking, so disengage the way a cancel
       # would. Keep the escalating soft disable for a gear leaving D while still rolling.
