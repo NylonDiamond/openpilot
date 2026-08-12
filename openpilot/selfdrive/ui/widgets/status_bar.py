@@ -1,5 +1,9 @@
 """What the home screen used to spend on advertising: whether this thing is ready to drive.
 
+It rides in the top bar, so it is a strip rather than a panel, and every fact has to earn its
+width. Values say what they are ("0.20 s lag", not "lag: 0.20 s") because a key beside each one
+costs about a third of the bar and tells you nothing you could not read off the value.
+
 Everything here is readable while parked, which rules out anything only published onroad.
 Calibration comes from the stored param rather than the extrinsicsCalibration message for that reason,
 and the car comes from CarParamsPersistent, which is also what tells the rest of the UI what it
@@ -19,19 +23,17 @@ from openpilot.system.ui.lib.application import FontWeight, gui_app
 from openpilot.system.ui.lib.text_measure import measure_text_cached
 from openpilot.system.ui.widgets import Widget
 
-BG_COLOR = rl.Color(51, 51, 51, 255)
-SECTION_COLOR = rl.Color(150, 150, 150, 255)
-KEY_COLOR = rl.Color(170, 170, 170, 255)
-VALUE_COLOR = rl.WHITE
+VALUE_COLOR = rl.Color(228, 228, 228, 255)
 GOOD_COLOR = rl.Color(134, 255, 78, 255)
 WARN_COLOR = rl.Color(255, 179, 0, 255)
+SEPARATOR_COLOR = rl.Color(110, 110, 110, 255)
 
-PADDING = 32
-SECTION_FONT_SIZE = 34
-ROW_FONT_SIZE = 40
-SECTION_GAP = 22
-ROW_HEIGHT = 50
-SECTION_HEADER_HEIGHT = 46
+FONT_SIZE = 28
+# wide enough that two facts do not read as one sentence
+ITEM_GAP = 18
+# a middle dot would be better, but the font only carries the codepoints in EXTRA_FONT_CHARS
+# and that is not one of them. anything missing draws as a question mark.
+SEPARATOR = "•"
 
 # the slow reads are params and capnp decodes, neither of which changes between drives
 REFRESH_INTERVAL = 10.0
@@ -44,18 +46,13 @@ CALIBRATED = log.ExtrinsicsCalibration.Status.calibrated
 LAG_ESTIMATED = log.LateralDelay.Status.estimated
 
 
-def _pretty_fingerprint(fingerprint: str) -> str:
-  return fingerprint.replace("_", " ").title()
-
-
-class StatusBoard(Widget):
-  """A read-only summary of the car, the calibration, the panda and the device."""
+class StatusBar(Widget):
+  """A read-only summary of the car, the calibration, the panda and the device, in one line."""
 
   def __init__(self):
     super().__init__()
     self._params = Params()
     self._font_medium = gui_app.font(FontWeight.MEDIUM)
-    self._font_bold = gui_app.font(FontWeight.BOLD)
 
     self._last_refresh = 0.0
     self._calibration = ""
@@ -92,8 +89,8 @@ class StatusBoard(Widget):
 
     pitch = math.degrees(calib.rpyCalib[1])
     yaw = math.degrees(calib.rpyCalib[2])
-    pitch_text = f"{abs(pitch):.1f} deg {'down' if pitch > 0 else 'up'}"
-    yaw_text = f"{abs(yaw):.1f} deg {'left' if yaw > 0 else 'right'}"
+    pitch_text = f"{abs(pitch):.1f}° {'down' if pitch > 0 else 'up'}"
+    yaw_text = f"{abs(yaw):.1f}° {'left' if yaw > 0 else 'right'}"
     return f"{pitch_text}, {yaw_text}", True
 
   def _read_steer_lag(self) -> tuple[str, bool]:
@@ -113,76 +110,63 @@ class StatusBoard(Widget):
     # showing that number would read as though the car had been measured when it has not
     if lag.status != LAG_ESTIMATED:
       return "measuring", False
-    return f"{lag.lateralDelay:.2f} s", True
+    return f"{lag.lateralDelay:.2f} s lag", True
 
   def _update_state(self) -> None:
     if time.monotonic() - self._last_refresh >= REFRESH_INTERVAL:
       self.refresh()
 
-  def _sections(self) -> list[tuple[str, list[tuple[str, str, rl.Color]]]]:
+  def _items(self) -> list[tuple[str, rl.Color]]:
     CP = ui_state.CP
     device_state = ui_state.sm["deviceState"]
 
-    car_rows: list[tuple[str, str, rl.Color]] = []
+    # the car's fixed specs are a build-time fact rather than a readiness one, so they are not
+    # here. what is worth a glance before a drive is what the car has learned about itself.
+    items: list[tuple[str, rl.Color]] = []
     if CP is None:
-      car_rows.append(("", "no car seen yet", WARN_COLOR))
-    else:
-      car_rows.append(("", _pretty_fingerprint(CP.carFingerprint), VALUE_COLOR))
-      car_rows.append(("geometry", f"{CP.wheelbase:.2f} m, ratio {CP.steerRatio:.1f}", VALUE_COLOR))
-      car_rows.append(("mass", f"{CP.mass:.0f} kg", VALUE_COLOR))
-      car_rows.append(("steering lag", self._steer_lag, GOOD_COLOR if self._steer_lag_ok else WARN_COLOR))
+      items.append(("no car seen yet", WARN_COLOR))
+    items.append((self._calibration, GOOD_COLOR if self._calibration_ok else WARN_COLOR))
+    items.append((self._steer_lag, GOOD_COLOR if self._steer_lag_ok else WARN_COLOR))
 
-    calib_rows = [("", self._calibration, GOOD_COLOR if self._calibration_ok else WARN_COLOR)]
-
-    panda_rows: list[tuple[str, str, rl.Color]] = []
+    # the type only says whether a panda answered, and the safety model only says which mode it
+    # booted into, so they travel together
     panda_type = str(ui_state.panda_type)
     if panda_type == "unknown":
-      panda_rows.append(("", "not connected", WARN_COLOR))
+      items.append(("no panda", WARN_COLOR))
     else:
-      panda_rows.append(("type", panda_type, VALUE_COLOR))
-    if CP is not None and len(CP.safetyConfigs):
-      panda_rows.append(("safety", str(CP.safetyConfigs[-1].safetyModel), VALUE_COLOR))
+      safety = str(CP.safetyConfigs[-1].safetyModel) if CP is not None and len(CP.safetyConfigs) else ""
+      items.append((f"{panda_type}, {safety}" if safety else panda_type, VALUE_COLOR))
 
     free_space = device_state.freeSpacePercent
     temp = device_state.maxTempC
-    device_rows = [
-      ("storage", f"{free_space:.0f}% free", VALUE_COLOR if free_space > LOW_SPACE_PERCENT else WARN_COLOR),
-      ("temperature", f"{temp:.0f} C", VALUE_COLOR if temp < WARM_TEMP_C else WARN_COLOR),
-      ("network", str(device_state.networkType), VALUE_COLOR),
-      ("drives", self._route_count, VALUE_COLOR),
-    ]
+    items.append((f"{free_space:.0f}% free", VALUE_COLOR if free_space > LOW_SPACE_PERCENT else WARN_COLOR))
+    items.append((f"{temp:.0f} °C", VALUE_COLOR if temp < WARM_TEMP_C else WARN_COLOR))
+    items.append((str(device_state.networkType), VALUE_COLOR))
+    items.append((f"{self._route_count} drives", VALUE_COLOR))
 
-    return [("CAR", car_rows), ("CALIBRATION", calib_rows), ("PANDA", panda_rows), ("DEVICE", device_rows)]
-
-  @staticmethod
-  def _content_height(sections: list[tuple[str, list[tuple[str, str, rl.Color]]]]) -> float:
-    height = 2 * PADDING + SECTION_GAP * (len(sections) - 1)
-    for _, rows in sections:
-      height += SECTION_HEADER_HEIGHT + len(rows) * ROW_HEIGHT
-    return height
+    # a bar too narrow for everything drops from the right, so anything wrong goes to the left
+    # of everything that is fine. nothing is ever silently dropped for being a problem.
+    items.sort(key=lambda item: item[1] is not WARN_COLOR)
+    return items
 
   def _render(self, rect: rl.Rectangle) -> None:
-    sections = self._sections()
+    x = rect.x
+    right = rect.x + rect.width
+    separator_width = measure_text_cached(self._font_medium, SEPARATOR, FONT_SIZE).x
 
-    # hug the rows rather than stretching to the column, so the panel does not read as
-    # a mostly empty box when the car has fewer things to say
-    rect = rl.Rectangle(rect.x, rect.y, rect.width, min(rect.height, self._content_height(sections)))
-    rl.draw_rectangle_rounded(rect, 0.03, 20, BG_COLOR)
+    for index, (text, color) in enumerate(self._items()):
+      width = measure_text_cached(self._font_medium, text, FONT_SIZE).x
+      lead = 0.0 if index == 0 else ITEM_GAP + separator_width + ITEM_GAP
+      if x + lead + width > right:
+        break
 
-    x = rect.x + PADDING
-    y = rect.y + PADDING
-    width = rect.width - 2 * PADDING
+      if index:
+        rl.draw_text_ex(self._font_medium, SEPARATOR, rl.Vector2(x + ITEM_GAP, self._text_y(rect)),
+                        FONT_SIZE, 0, SEPARATOR_COLOR)
+        x += lead
 
-    for index, (title, rows) in enumerate(sections):
-      rl.draw_text_ex(self._font_bold, title, rl.Vector2(x, y), SECTION_FONT_SIZE, 0, SECTION_COLOR)
-      y += SECTION_HEADER_HEIGHT
+      rl.draw_text_ex(self._font_medium, text, rl.Vector2(x, self._text_y(rect)), FONT_SIZE, 0, color)
+      x += width
 
-      for key, value, color in rows:
-        if key:
-          rl.draw_text_ex(self._font_medium, key, rl.Vector2(x, y), ROW_FONT_SIZE, 0, KEY_COLOR)
-        value_width = measure_text_cached(self._font_medium, value, ROW_FONT_SIZE).x
-        rl.draw_text_ex(self._font_medium, value, rl.Vector2(x + width - value_width, y), ROW_FONT_SIZE, 0, color)
-        y += ROW_HEIGHT
-
-      if index < len(sections) - 1:
-        y += SECTION_GAP
+  def _text_y(self, rect: rl.Rectangle) -> float:
+    return rect.y + (rect.height - FONT_SIZE) / 2
