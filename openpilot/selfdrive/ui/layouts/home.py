@@ -4,7 +4,7 @@ from enum import IntEnum
 from openpilot.common.params import Params
 from openpilot.selfdrive.ui.widgets.offroad_alerts import UpdateAlert, OffroadAlert
 from openpilot.selfdrive.ui.widgets.settings_grid import DRIVING_PARAMS, SettingsGrid
-from openpilot.selfdrive.ui.widgets.status_board import StatusBoard
+from openpilot.selfdrive.ui.widgets.status_bar import StatusBar
 from openpilot.system.ui.lib.text_measure import measure_text_cached
 from openpilot.system.ui.lib.application import gui_app, FontWeight, MousePos
 from openpilot.system.ui.lib.multilang import tr, trn
@@ -15,13 +15,12 @@ HEADER_HEIGHT = 80
 HEAD_BUTTON_FONT_SIZE = 40
 CONTENT_MARGIN = 40
 SPACING = 25
-# the status board's widest row is "mass, delay" at 517 px, so this leaves it a 60 px gap
-# between key and value and hands the rest of the width to the settings
-RIGHT_COLUMN_WIDTH = 640
+VERSION_FONT_SIZE = 48
 REFRESH_INTERVAL = 10.0
 
-# the settings grid is one column here, so every driving setting has to fit down the page
-SETTINGS_ROW_HEIGHT = 88
+# the settings grid is one column here, so every driving setting has to fit down the page. nine
+# rows at 90 fill all but 19 px of it, and the whole row is the tap target
+SETTINGS_ROW_HEIGHT = 90
 COLUMN_TITLE_HEIGHT = 66
 COLUMN_TITLE_FONT_SIZE = 44
 
@@ -53,8 +52,6 @@ class HomeLayout(Widget):
 
     self.header_rect = rl.Rectangle(0, 0, 0, 0)
     self.content_rect = rl.Rectangle(0, 0, 0, 0)
-    self.left_column_rect = rl.Rectangle(0, 0, 0, 0)
-    self.right_column_rect = rl.Rectangle(0, 0, 0, 0)
 
     self.update_notif_rect = rl.Rectangle(0, 0, 200, HEADER_HEIGHT - 10)
     self.alert_notif_rect = rl.Rectangle(0, 0, 220, HEADER_HEIGHT - 10)
@@ -62,7 +59,8 @@ class HomeLayout(Widget):
     # the home screen is where a drive gets set up, so it carries what changes how the car
     # drives. the rest of the settings stay one tap away in the overlay and in the menu.
     self._settings_grid = self._child(SettingsGrid(DRIVING_PARAMS, len(DRIVING_PARAMS), SETTINGS_ROW_HEIGHT))
-    self._status_board = self._child(StatusBoard())
+    # the readiness summary rides in the top bar, so the settings get the whole page under it
+    self._status_bar = self._child(StatusBar())
     self._setup_callbacks()
 
   def show_event(self):
@@ -79,7 +77,7 @@ class HomeLayout(Widget):
     if state != self.current_state:
       if state == HomeLayoutState.HOME:
         self._settings_grid.refresh()
-        self._status_board.refresh()
+        self._status_bar.refresh()
 
       if state in self._layout_widgets:
         self._layout_widgets[state].show_event()
@@ -116,14 +114,6 @@ class HomeLayout(Widget):
       self._rect.x + CONTENT_MARGIN, content_y, self._rect.width - 2 * CONTENT_MARGIN, content_height
     )
 
-    left_width = self.content_rect.width - RIGHT_COLUMN_WIDTH - SPACING
-
-    self.left_column_rect = rl.Rectangle(self.content_rect.x, self.content_rect.y, left_width, self.content_rect.height)
-
-    self.right_column_rect = rl.Rectangle(
-      self.content_rect.x + left_width + SPACING, self.content_rect.y, RIGHT_COLUMN_WIDTH, self.content_rect.height
-    )
-
     self.update_notif_rect.x = self.header_rect.x
     self.update_notif_rect.y = self.header_rect.y + (self.header_rect.height - 60) // 2
 
@@ -141,13 +131,11 @@ class HomeLayout(Widget):
 
   def _render_header(self):
     font = gui_app.font(FontWeight.MEDIUM)
-
-    version_text_width = self.header_rect.width
+    left = self.header_rect.x
+    right = self.header_rect.x + self.header_rect.width
 
     # Update notification button
     if self.update_available:
-      version_text_width -= self.update_notif_rect.width
-
       # Highlight if currently viewing updates
       highlight_color = rl.Color(75, 95, 255, 255) if self.current_state == HomeLayoutState.UPDATE else rl.Color(54, 77, 239, 255)
       rl.draw_rectangle_rounded(self.update_notif_rect, 0.3, 10, highlight_color)
@@ -157,11 +145,10 @@ class HomeLayout(Widget):
       text_x = self.update_notif_rect.x + (self.update_notif_rect.width - text_size.x) // 2
       text_y = self.update_notif_rect.y + (self.update_notif_rect.height - text_size.y) // 2
       rl.draw_text_ex(font, text, rl.Vector2(int(text_x), int(text_y)), HEAD_BUTTON_FONT_SIZE, 0, rl.WHITE)
+      left = self.update_notif_rect.x + self.update_notif_rect.width
 
     # Alert notification button
     if self.alert_count > 0:
-      version_text_width -= self.alert_notif_rect.width
-
       # Highlight if currently viewing alerts
       highlight_color = rl.Color(255, 70, 70, 255) if self.current_state == HomeLayoutState.ALERTS else rl.Color(226, 44, 44, 255)
       rl.draw_rectangle_rounded(self.alert_notif_rect, 0.3, 10, highlight_color)
@@ -171,18 +158,28 @@ class HomeLayout(Widget):
       text_x = self.alert_notif_rect.x + (self.alert_notif_rect.width - text_size.x) // 2
       text_y = self.alert_notif_rect.y + (self.alert_notif_rect.height - text_size.y) // 2
       rl.draw_text_ex(font, alert_text, rl.Vector2(int(text_x), int(text_y)), HEAD_BUTTON_FONT_SIZE, 0, rl.WHITE)
+      left = self.alert_notif_rect.x + self.alert_notif_rect.width
+
+    if left > self.header_rect.x:
+      left += SPACING * 1.5
 
     # Version text (right aligned)
-    if self.update_available or self.alert_count > 0:
-      version_text_width -= SPACING * 1.5
+    version_width = measure_text_cached(font, self._version_text, VERSION_FONT_SIZE).x
+    version_rect = rl.Rectangle(right - version_width, self.header_rect.y, version_width, self.header_rect.height)
+    gui_label(version_rect, self._version_text, VERSION_FONT_SIZE, rl.WHITE, alignment=rl.GuiTextAlignment.TEXT_ALIGN_RIGHT)
 
-    version_rect = rl.Rectangle(self.header_rect.x + self.header_rect.width - version_text_width, self.header_rect.y,
-                                version_text_width, self.header_rect.height)
-    gui_label(version_rect, self._version_text, 48, rl.WHITE, alignment=rl.GuiTextAlignment.TEXT_ALIGN_RIGHT)
+    # the readiness summary takes whatever the buttons and the version leave it, and drops its
+    # own tail when that is not enough for every fact
+    self._status_bar.render(rl.Rectangle(left, self.header_rect.y,
+                                         max(0.0, right - version_width - SPACING * 1.5 - left),
+                                         self.header_rect.height))
 
   def _render_home_content(self):
-    self._render_left_column()
-    self._render_right_column()
+    rect = self.content_rect
+    gui_label(rl.Rectangle(rect.x, rect.y, rect.width, COLUMN_TITLE_HEIGHT), tr("SETTINGS"),
+              COLUMN_TITLE_FONT_SIZE, font_weight=FontWeight.BOLD)
+    self._settings_grid.render(rl.Rectangle(rect.x, rect.y + COLUMN_TITLE_HEIGHT, rect.width,
+                                            rect.height - COLUMN_TITLE_HEIGHT))
 
   def _render_update_view(self):
     self.update_alert.render(self.content_rect)
@@ -190,21 +187,10 @@ class HomeLayout(Widget):
   def _render_alerts_view(self):
     self.offroad_alert.render(self.content_rect)
 
-  def _render_left_column(self):
-    rect = self.left_column_rect
-    gui_label(rl.Rectangle(rect.x, rect.y, rect.width, COLUMN_TITLE_HEIGHT), tr("SETTINGS"),
-              COLUMN_TITLE_FONT_SIZE, font_weight=FontWeight.BOLD)
-    grid_rect = rl.Rectangle(rect.x, rect.y + COLUMN_TITLE_HEIGHT, rect.width,
-                             rect.height - COLUMN_TITLE_HEIGHT)
-    self._settings_grid.render(grid_rect)
-
-  def _render_right_column(self):
-    self._status_board.render(self.right_column_rect)
-
   def _refresh(self):
     self._version_text = self._get_version_text()
     self._settings_grid.refresh()
-    self._status_board.refresh()
+    self._status_bar.refresh()
     update_available = self.update_alert.refresh()
     alert_count = self.offroad_alert.refresh()
     alerts_present = alert_count > 0

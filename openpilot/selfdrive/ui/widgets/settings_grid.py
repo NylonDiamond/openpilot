@@ -24,16 +24,26 @@ from openpilot.system.ui.widgets.toggle import Toggle
 ROW_HEIGHT = 92
 COLUMN_GAP = 60
 
-SEG_WIDTH = 108
-SEG_GAP = 10
-SEG_HEIGHT = 62
+# the pills stretch into whatever the column has spare, between a size that still reads at a
+# glance and a size past which they are just wide. the onroad panel is two columns over the
+# camera and lands near the bottom of that range, the home screen at the top of it
+SEG_MIN_WIDTH = 96
+SEG_MAX_WIDTH = 200
+SEG_GAP = 15
+SEG_HEIGHT = 78
+# the least a label may sit from the control beside it
+LABEL_GAP = 40
 
 # Toggle draws itself at a fixed size, these have to match
 TOGGLE_WIDTH = 160
 TOGGLE_HEIGHT = 80
+# ...and 160 x 80 is a small target to hit in a moving car, so the switch takes taps from a band
+# of the row that starts at the switch and runs on past it. it never reaches back to the label,
+# so a tap that missed the row entirely does not read as a deliberate one
+TOGGLE_HIT_WIDTH = 320
 
-LABEL_FONT_SIZE = 36
-SEG_FONT_SIZE = 30
+LABEL_FONT_SIZE = 38
+SEG_FONT_SIZE = 32
 
 LABEL_COLOR = rl.Color(228, 228, 228, 255)
 LABEL_DISABLED_COLOR = rl.Color(120, 120, 120, 255)
@@ -78,6 +88,26 @@ DISPLAY_PARAMS = tuple(s[0] for s in BOOL_SETTINGS if s[0] not in DRIVING_PARAMS
 ALL_PARAMS = DRIVING_PARAMS + DISPLAY_PARAMS
 
 
+class RowToggle(Toggle):
+  """A Toggle that draws at its fixed size but answers to the whole band it is given.
+
+  Toggle pins its own rect to 160 x 80, which is both what it draws and what it accepts taps
+  in. Keeping the band as the widget rect and moving the fixed rect back only for the draw
+  leaves the switch looking the same while making it much harder to miss.
+  """
+
+  def set_rect(self, rect: rl.Rectangle) -> None:
+    Widget.set_rect(self, rect)
+
+  def _render(self, _: rl.Rectangle) -> None:
+    band = self._rect
+    self._rect = rl.Rectangle(band.x, band.y + (band.height - TOGGLE_HEIGHT) / 2, TOGGLE_WIDTH, TOGGLE_HEIGHT)
+    try:
+      return super()._render(self._rect)
+    finally:
+      self._rect = band
+
+
 class Segmented(Widget):
   """A row of buttons where exactly one is selected, sized to fit beside a label."""
 
@@ -87,10 +117,14 @@ class Segmented(Widget):
     self._selected = selected
     self._callback = callback
     self._font = gui_app.font(FontWeight.MEDIUM)
+    self._button_width = SEG_MAX_WIDTH
 
-  @staticmethod
-  def width_for(count: int) -> int:
-    return count * SEG_WIDTH + (count - 1) * SEG_GAP
+  def set_button_width(self, width: int) -> None:
+    self._button_width = width
+
+  @property
+  def width(self) -> int:
+    return len(self._texts) * self._button_width + (len(self._texts) - 1) * SEG_GAP
 
   @property
   def selected(self) -> int:
@@ -101,7 +135,17 @@ class Segmented(Widget):
 
   def _button_rect(self, index: int) -> rl.Rectangle:
     y = self._rect.y + (self._rect.height - SEG_HEIGHT) / 2
-    return rl.Rectangle(self._rect.x + index * (SEG_WIDTH + SEG_GAP), y, SEG_WIDTH, SEG_HEIGHT)
+    return rl.Rectangle(self._rect.x + index * (self._button_width + SEG_GAP), y, self._button_width, SEG_HEIGHT)
+
+  def _touch_rect(self, index: int) -> rl.Rectangle:
+    """The pill is what you aim at, but the whole row band around it is what you can hit.
+
+    Nothing else lives in the gaps between the pills or above and below them, so a near miss is
+    unambiguous and there is no reason to make it cost a second tap.
+    """
+    button_rect = self._button_rect(index)
+    return rl.Rectangle(button_rect.x - SEG_GAP / 2, self._rect.y,
+                        self._button_width + SEG_GAP, self._rect.height)
 
   def _render(self, _: rl.Rectangle) -> None:
     mouse_pos = rl.get_mouse_position()
@@ -109,7 +153,7 @@ class Segmented(Widget):
       button_rect = self._button_rect(i)
       if i == self._selected:
         color = SEG_SELECTED
-      elif self.enabled and self.is_pressed and rl.check_collision_point_rec(mouse_pos, button_rect):
+      elif self.enabled and self.is_pressed and rl.check_collision_point_rec(mouse_pos, self._touch_rect(i)):
         color = SEG_PRESSED
       else:
         color = SEG_BG
@@ -119,12 +163,13 @@ class Segmented(Widget):
       rl.draw_rectangle_rounded(button_rect, 1.0, 20, color)
 
       text_size = measure_text_cached(self._font, text, SEG_FONT_SIZE)
-      text_pos = rl.Vector2(button_rect.x + (SEG_WIDTH - text_size.x) / 2, button_rect.y + (SEG_HEIGHT - text_size.y) / 2)
+      text_pos = rl.Vector2(button_rect.x + (self._button_width - text_size.x) / 2,
+                            button_rect.y + (SEG_HEIGHT - text_size.y) / 2)
       rl.draw_text_ex(self._font, text, text_pos, SEG_FONT_SIZE, 0, SEG_TEXT if self.enabled else SEG_TEXT_DISABLED)
 
   def _handle_mouse_release(self, mouse_pos: MousePos) -> None:
     for i in range(len(self._texts)):
-      if rl.check_collision_point_rec(mouse_pos, self._button_rect(i)):
+      if rl.check_collision_point_rec(mouse_pos, self._touch_rect(i)):
         self._selected = i
         self._callback(i)
         return
@@ -146,11 +191,11 @@ class SettingsGrid(Widget):
     self._restarts = {s[0] for s in BOOL_SETTINGS if s[2]} & set(param_names)
     self._choice_values = {s[0]: s[2] for s in CHOICE_SETTINGS if s[0] in param_names}
 
-    self._toggles: dict[str, Toggle] = {}
+    self._toggles: dict[str, RowToggle] = {}
     for param, _, _ in BOOL_SETTINGS:
       if param in param_names:
-        self._toggles[param] = Toggle(initial_state=self._params.get_bool(param),
-                                      callback=lambda state, p=param: self._set_bool(p, state))
+        self._toggles[param] = RowToggle(initial_state=self._params.get_bool(param),
+                                         callback=lambda state, p=param: self._set_bool(p, state))
 
     self._segments: dict[str, Segmented] = {}
     for param, _, _, texts in CHOICE_SETTINGS:
@@ -159,6 +204,13 @@ class SettingsGrid(Widget):
                                           lambda index, p=param: self._set_choice(p, index))
 
     self._controls: dict[str, Widget] = {**self._toggles, **self._segments}
+
+    # what has to fit beside the pills, so they can be sized to the column at render time
+    self._widest_choice_label = max((measure_text_cached(self._font, self._labels[p], LABEL_FONT_SIZE).x
+                                     for p in self._segments), default=0.0)
+    self._widest_label = max((measure_text_cached(self._font, self._labels[p], LABEL_FONT_SIZE).x
+                              for p in param_names), default=0.0)
+    self._most_choices = max((len(v) for v in self._choice_values.values()), default=0)
 
   @property
   def columns(self) -> int:
@@ -169,6 +221,13 @@ class SettingsGrid(Widget):
 
   def column_width(self, total_width: float) -> float:
     return (total_width - (self._columns - 1) * COLUMN_GAP) / self._columns
+
+  def _button_width(self, column_width: float) -> int:
+    """Spend whatever the widest choice row does not need on the buttons themselves."""
+    if not self._most_choices:
+      return SEG_MAX_WIDTH
+    spare = column_width - self._widest_choice_label - LABEL_GAP - (self._most_choices - 1) * SEG_GAP
+    return int(min(SEG_MAX_WIDTH, max(SEG_MIN_WIDTH, spare / self._most_choices)))
 
   def show_event(self) -> None:
     super().show_event()
@@ -215,21 +274,28 @@ class SettingsGrid(Widget):
   def _render(self, rect: rl.Rectangle) -> None:
     column_width = self.column_width(rect.width)
 
+    # one width for every row, so the pills line up down the column
+    button_width = self._button_width(column_width)
+    for segment in self._segments.values():
+      segment.set_button_width(button_width)
+
     for i, param in enumerate(self._param_names):
       control = self._controls[param]
       x = rect.x + (i // self._rows_per_column) * (column_width + COLUMN_GAP)
       y = rect.y + (i % self._rows_per_column) * self._row_height
 
-      is_toggle = isinstance(control, Toggle)
-      control_width = TOGGLE_WIDTH if is_toggle else Segmented.width_for(len(self._choice_values[param]))
+      is_toggle = isinstance(control, RowToggle)
+      control_width = TOGGLE_HIT_WIDTH if is_toggle else control.width
 
       label_color = LABEL_COLOR if control.enabled else LABEL_DISABLED_COLOR
       label_size = measure_text_cached(self._font, self._labels[param], LABEL_FONT_SIZE)
       rl.draw_text_ex(self._font, self._labels[param],
                       rl.Vector2(x, y + (self._row_height - label_size.y) / 2), LABEL_FONT_SIZE, 0, label_color)
 
-      # Toggle forces its own 160x80 size, so it only reads the top left corner
-      control_height = TOGGLE_HEIGHT if is_toggle else self._row_height
-      control.render(rl.Rectangle(x + column_width - control_width,
-                                  y + (self._row_height - control_height) / 2,
-                                  control_width, control_height))
+      # the controls sit just past the longest label rather than out at the column edge: the
+      # driver sits to the left of this screen, so the far right is the worst place to reach.
+      # a column with no slack clamps back to the edge.
+      control_x = min(x + self._widest_label + LABEL_GAP, x + column_width - control_width)
+
+      # both controls take the whole row band, and place their own smaller visuals inside it
+      control.render(rl.Rectangle(control_x, y, control_width, self._row_height))
