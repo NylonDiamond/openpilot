@@ -18,9 +18,15 @@ SPACING = 25
 VERSION_FONT_SIZE = 48
 REFRESH_INTERVAL = 10.0
 
-# the settings grid is one column here, so every driving setting has to fit down the page. nine
-# rows at 90 fill all but 19 px of it, and the whole row is the tap target
-SETTINGS_ROW_HEIGHT = 90
+# the settings grid is one column here, so every driving setting has to fit down the page. the
+# three switches share the last row, which leaves seven rows to fill it, and 118 spends the
+# height that buys back on the tap targets rather than on empty page
+INLINE_SWITCHES = 3
+SETTINGS_ROWS = len(DRIVING_PARAMS) - INLINE_SWITCHES + 1
+SETTINGS_ROW_HEIGHT = 118
+# the compact switch row leaves the page wider than the pills need, so they take the slack
+# rather than leaving it empty beside them
+SETTINGS_BUTTON_WIDTH = 300
 COLUMN_TITLE_HEIGHT = 66
 COLUMN_TITLE_FONT_SIZE = 44
 
@@ -58,8 +64,10 @@ class HomeLayout(Widget):
 
     # the home screen is where a drive gets set up, so it carries what changes how the car
     # drives. the rest of the settings stay one tap away in the overlay and in the menu.
-    self._settings_grid = self._child(SettingsGrid(DRIVING_PARAMS, len(DRIVING_PARAMS), SETTINGS_ROW_HEIGHT))
-    # the readiness summary rides in the top bar, so the settings get the whole page under it
+    self._settings_grid = self._child(SettingsGrid(DRIVING_PARAMS, SETTINGS_ROWS, SETTINGS_ROW_HEIGHT,
+                                                   inline_tail=INLINE_SWITCHES,
+                                                   max_button_width=SETTINGS_BUTTON_WIDTH))
+    # the readiness summary shares the settings title row, so it costs no height of its own
     self._status_bar = self._child(StatusBar())
     self._setup_callbacks()
 
@@ -117,8 +125,7 @@ class HomeLayout(Widget):
     self.update_notif_rect.x = self.header_rect.x
     self.update_notif_rect.y = self.header_rect.y + (self.header_rect.height - 60) // 2
 
-    notif_x = self.header_rect.x + (220 if self.update_available else 0)
-    self.alert_notif_rect.x = notif_x
+    self.alert_notif_rect.x = self.header_rect.x + (220 if self.update_available else 0)
     self.alert_notif_rect.y = self.header_rect.y + (self.header_rect.height - 60) // 2
 
   def _handle_mouse_release(self, mouse_pos: MousePos):
@@ -131,7 +138,6 @@ class HomeLayout(Widget):
 
   def _render_header(self):
     font = gui_app.font(FontWeight.MEDIUM)
-    left = self.header_rect.x
     right = self.header_rect.x + self.header_rect.width
 
     # Update notification button
@@ -145,7 +151,6 @@ class HomeLayout(Widget):
       text_x = self.update_notif_rect.x + (self.update_notif_rect.width - text_size.x) // 2
       text_y = self.update_notif_rect.y + (self.update_notif_rect.height - text_size.y) // 2
       rl.draw_text_ex(font, text, rl.Vector2(int(text_x), int(text_y)), HEAD_BUTTON_FONT_SIZE, 0, rl.WHITE)
-      left = self.update_notif_rect.x + self.update_notif_rect.width
 
     # Alert notification button
     if self.alert_count > 0:
@@ -158,26 +163,23 @@ class HomeLayout(Widget):
       text_x = self.alert_notif_rect.x + (self.alert_notif_rect.width - text_size.x) // 2
       text_y = self.alert_notif_rect.y + (self.alert_notif_rect.height - text_size.y) // 2
       rl.draw_text_ex(font, alert_text, rl.Vector2(int(text_x), int(text_y)), HEAD_BUTTON_FONT_SIZE, 0, rl.WHITE)
-      left = self.alert_notif_rect.x + self.alert_notif_rect.width
-
-    if left > self.header_rect.x:
-      left += SPACING * 1.5
 
     # Version text (right aligned)
     version_width = measure_text_cached(font, self._version_text, VERSION_FONT_SIZE).x
     version_rect = rl.Rectangle(right - version_width, self.header_rect.y, version_width, self.header_rect.height)
     gui_label(version_rect, self._version_text, VERSION_FONT_SIZE, rl.WHITE, alignment=rl.GuiTextAlignment.TEXT_ALIGN_RIGHT)
 
-    # the readiness summary takes whatever the buttons and the version leave it, and drops its
-    # own tail when that is not enough for every fact
-    self._status_bar.render(rl.Rectangle(left, self.header_rect.y,
-                                         max(0.0, right - version_width - SPACING * 1.5 - left),
-                                         self.header_rect.height))
-
   def _render_home_content(self):
     rect = self.content_rect
-    gui_label(rl.Rectangle(rect.x, rect.y, rect.width, COLUMN_TITLE_HEIGHT), tr("SETTINGS"),
+    title = tr("SETTINGS")
+    gui_label(rl.Rectangle(rect.x, rect.y, rect.width, COLUMN_TITLE_HEIGHT), title,
               COLUMN_TITLE_FONT_SIZE, font_weight=FontWeight.BOLD)
+
+    # the readiness summary rides beside the title on the same line, and drops its own tail when
+    # what the title leaves is not enough for every fact
+    status_x = rect.x + measure_text_cached(gui_app.font(FontWeight.BOLD), title, COLUMN_TITLE_FONT_SIZE).x + SPACING * 2
+    self._status_bar.render(rl.Rectangle(status_x, rect.y, max(0.0, rect.x + rect.width - status_x), COLUMN_TITLE_HEIGHT))
+
     self._settings_grid.render(rl.Rectangle(rect.x, rect.y + COLUMN_TITLE_HEIGHT, rect.width,
                                             rect.height - COLUMN_TITLE_HEIGHT))
 
