@@ -1,7 +1,7 @@
 """What the home screen used to spend on advertising: whether this thing is ready to drive.
 
-It rides in the top bar, so it is a strip rather than a panel, and every fact has to earn its
-width. Values say what they are ("0.20 s lag", not "lag: 0.20 s") because a key beside each one
+It rides on a row it shares with something else, so it is a strip rather than a panel, and every
+fact has to earn its width. Values say what they are ("0.20 s lag", not "lag: 0.20 s") because a key beside each one
 costs about a third of the bar and tells you nothing you could not read off the value.
 
 Everything here is readable while parked, which rules out anything only published onroad.

@@ -26,13 +26,17 @@ COLUMN_GAP = 60
 
 # the pills stretch into whatever the column has spare, between a size that still reads at a
 # glance and a size past which they are just wide. the onroad panel is two columns over the
-# camera and lands near the bottom of that range, the home screen at the top of it
+# camera and lands near the bottom of that range, the home screen has a full page to itself and
+# raises the ceiling to fill it
 SEG_MIN_WIDTH = 96
 SEG_MAX_WIDTH = 200
 SEG_GAP = 15
 SEG_HEIGHT = 78
 # the least a label may sit from the control beside it
 LABEL_GAP = 40
+# what separates two switches sharing a row. wide enough that a near miss on one cannot land in
+# the next one's tap band
+INLINE_GAP = 60
 
 # Toggle draws itself at a fixed size, these have to match
 TOGGLE_WIDTH = 160
@@ -69,13 +73,15 @@ BOOL_SETTINGS = (
 )
 
 # param, label, stored values, button labels
+# brightness leads: it is the one here that is worth changing without any thought about the
+# drive, and the top row is the easiest to hit both parked and over the camera
 CHOICE_SETTINGS = (
+  ("BrightnessLevel", "Brightness", BRIGHTNESS_LEVELS, ("Auto", "25", "50", "75", "100")),
   ("AutoLaneChangeTimer", "Auto lane change", AUTO_LANE_CHANGE_TIMERS, ("Nudge", "1s", "2s", "3s")),
   ("BlinkerPauseSpeed", "Blinker pause", BLINKER_PAUSE_SPEEDS_MPH, ("Off", "20", "40", "Any")),
   ("BlinkerPauseDelay", "Resume delay", BLINKER_PAUSE_DELAYS, ("Now", "1s", "2s", "3s")),
   ("CurveAdvisory", "Curve warning", CURVE_ADVISORY_LEVELS, ("Off", "Late", "Norm", "Early")),
   ("LanePosition", "Lane position", LANE_POSITION_OFFSETS_CM, ("FL", "L", "C", "R", "FR")),
-  ("BrightnessLevel", "Brightness", BRIGHTNESS_LEVELS, ("Auto", "25", "50", "75", "100")),
 )
 
 # what changes how the car drives. this is the set worth having on the home screen, where the
@@ -178,14 +184,23 @@ class Segmented(Widget):
 class SettingsGrid(Widget):
   """Label on the left, control on the right, filled column by column."""
 
-  def __init__(self, param_names: tuple[str, ...], rows_per_column: int, row_height: int = ROW_HEIGHT):
+  def __init__(self, param_names: tuple[str, ...], rows_per_column: int, row_height: int = ROW_HEIGHT,
+               inline_tail: int = 0, max_button_width: int = SEG_MAX_WIDTH):
     super().__init__()
     self._params = Params()
     self._param_names = param_names
     self._rows_per_column = rows_per_column
     self._row_height = row_height
-    self._columns = math.ceil(len(param_names) / rows_per_column)
+    self._max_button_width = max_button_width
     self._font = gui_app.font(FontWeight.MEDIUM)
+
+    # the last few settings can share a single row instead of taking one each. switches are the
+    # only control narrow enough for that, and reading three of them as one group costs nothing
+    self._inline_tail = inline_tail
+    self._stacked_params = param_names[:len(param_names) - inline_tail]
+    self._inline_params = param_names[len(param_names) - inline_tail:]
+    self._slots = len(self._stacked_params) + (1 if inline_tail else 0)
+    self._columns = math.ceil(self._slots / rows_per_column)
 
     self._labels = {s[0]: s[1] for s in BOOL_SETTINGS} | {s[0]: s[1] for s in CHOICE_SETTINGS}
     self._restarts = {s[0] for s in BOOL_SETTINGS if s[2]} & set(param_names)
@@ -205,11 +220,16 @@ class SettingsGrid(Widget):
 
     self._controls: dict[str, Widget] = {**self._toggles, **self._segments}
 
+    assert all(p in self._toggles for p in self._inline_params), "only switches fit on a shared row"
+
     # what has to fit beside the pills, so they can be sized to the column at render time
     self._widest_choice_label = max((measure_text_cached(self._font, self._labels[p], LABEL_FONT_SIZE).x
                                      for p in self._segments), default=0.0)
     self._widest_label = max((measure_text_cached(self._font, self._labels[p], LABEL_FONT_SIZE).x
-                              for p in param_names), default=0.0)
+                              for p in self._stacked_params), default=0.0)
+    # one width for every cell of the shared row, so those switches line up with each other
+    self._widest_inline_label = max((measure_text_cached(self._font, self._labels[p], LABEL_FONT_SIZE).x
+                                     for p in self._inline_params), default=0.0)
     self._most_choices = max((len(v) for v in self._choice_values.values()), default=0)
 
   @property
@@ -217,7 +237,7 @@ class SettingsGrid(Widget):
     return self._columns
 
   def height_hint(self) -> float:
-    return min(len(self._param_names), self._rows_per_column) * self._row_height
+    return min(self._slots, self._rows_per_column) * self._row_height
 
   def column_width(self, total_width: float) -> float:
     return (total_width - (self._columns - 1) * COLUMN_GAP) / self._columns
@@ -225,9 +245,9 @@ class SettingsGrid(Widget):
   def _button_width(self, column_width: float) -> int:
     """Spend whatever the widest choice row does not need on the buttons themselves."""
     if not self._most_choices:
-      return SEG_MAX_WIDTH
+      return self._max_button_width
     spare = column_width - self._widest_choice_label - LABEL_GAP - (self._most_choices - 1) * SEG_GAP
-    return int(min(SEG_MAX_WIDTH, max(SEG_MIN_WIDTH, spare / self._most_choices)))
+    return int(min(self._max_button_width, max(SEG_MIN_WIDTH, spare / self._most_choices)))
 
   def show_event(self) -> None:
     super().show_event()
@@ -279,18 +299,14 @@ class SettingsGrid(Widget):
     for segment in self._segments.values():
       segment.set_button_width(button_width)
 
-    for i, param in enumerate(self._param_names):
+    for i, param in enumerate(self._stacked_params):
       control = self._controls[param]
-      x = rect.x + (i // self._rows_per_column) * (column_width + COLUMN_GAP)
-      y = rect.y + (i % self._rows_per_column) * self._row_height
+      x, y = self._slot_origin(rect, i, column_width)
 
       is_toggle = isinstance(control, RowToggle)
       control_width = TOGGLE_HIT_WIDTH if is_toggle else control.width
 
-      label_color = LABEL_COLOR if control.enabled else LABEL_DISABLED_COLOR
-      label_size = measure_text_cached(self._font, self._labels[param], LABEL_FONT_SIZE)
-      rl.draw_text_ex(self._font, self._labels[param],
-                      rl.Vector2(x, y + (self._row_height - label_size.y) / 2), LABEL_FONT_SIZE, 0, label_color)
+      self._draw_label(param, x, y, control.enabled)
 
       # the controls sit just past the longest label rather than out at the column edge: the
       # driver sits to the left of this screen, so the far right is the worst place to reach.
@@ -299,3 +315,30 @@ class SettingsGrid(Widget):
 
       # both controls take the whole row band, and place their own smaller visuals inside it
       control.render(rl.Rectangle(control_x, y, control_width, self._row_height))
+
+    if self._inline_params:
+      self._render_inline_row(rect, column_width)
+
+  def _slot_origin(self, rect: rl.Rectangle, slot: int, column_width: float) -> tuple[float, float]:
+    return (rect.x + (slot // self._rows_per_column) * (column_width + COLUMN_GAP),
+            rect.y + (slot % self._rows_per_column) * self._row_height)
+
+  def _draw_label(self, param: str, x: float, y: float, enabled: bool) -> None:
+    label_size = measure_text_cached(self._font, self._labels[param], LABEL_FONT_SIZE)
+    rl.draw_text_ex(self._font, self._labels[param], rl.Vector2(x, y + (self._row_height - label_size.y) / 2),
+                    LABEL_FONT_SIZE, 0, LABEL_COLOR if enabled else LABEL_DISABLED_COLOR)
+
+  def _render_inline_row(self, rect: rl.Rectangle, column_width: float) -> None:
+    """The tail of the grid, laid out across one row instead of down several."""
+    x, y = self._slot_origin(rect, len(self._stacked_params), column_width)
+    cell_width = (column_width - (len(self._inline_params) - 1) * INLINE_GAP) / len(self._inline_params)
+
+    for i, param in enumerate(self._inline_params):
+      control = self._controls[param]
+      cell_x = x + i * (cell_width + INLINE_GAP)
+      self._draw_label(param, cell_x, y, control.enabled)
+
+      # same rule as a full row: the band starts at the switch and runs to the end of the cell,
+      # never back to a label and never into the cell beside it
+      control_x = cell_x + self._widest_inline_label + LABEL_GAP
+      control.render(rl.Rectangle(control_x, y, max(TOGGLE_WIDTH, cell_x + cell_width - control_x), self._row_height))
