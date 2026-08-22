@@ -61,6 +61,7 @@ SEG_TEXT_DISABLED = rl.Color(130, 130, 130, 255)
 BOOL_SETTINGS = (
   ("MadsEnabled", "MADS", True),
   ("MadsMainSwitch", "MADS main switch", True),
+  ("SubaruAutoResume", "Auto resume", True),
   ("ReverseGearDebounce", "Reverse debounce", False),
   ("IsLdwEnabled", "Lane departure warn", False),
   ("ShowLeadIndicator", "Lead marker", False),
@@ -86,7 +87,7 @@ CHOICE_SETTINGS = (
 
 # what changes how the car drives. this is the set worth having on the home screen, where the
 # question is what to try on the next drive rather than what to change during one
-DRIVING_PARAMS = tuple(s[0] for s in CHOICE_SETTINGS) + ("MadsEnabled", "MadsMainSwitch", "ReverseGearDebounce")
+DRIVING_PARAMS = tuple(s[0] for s in CHOICE_SETTINGS) + ("MadsEnabled", "MadsMainSwitch", "SubaruAutoResume", "ReverseGearDebounce")
 
 # and what only changes how the screen looks
 DISPLAY_PARAMS = tuple(s[0] for s in BOOL_SETTINGS if s[0] not in DRIVING_PARAMS)

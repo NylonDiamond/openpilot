@@ -18,7 +18,8 @@ from opendbc.car.carlog import carlog
 from opendbc.car.fw_versions import ObdCallback
 from opendbc.car.car_helpers import get_car, interfaces
 from opendbc.car.interfaces import CarInterfaceBase, RadarInterfaceBase
-from opendbc.car.subaru.values import enable_mads as subaru_enable_mads, enable_mads_main as subaru_enable_mads_main
+from opendbc.car.subaru.values import enable_mads as subaru_enable_mads, enable_mads_main as subaru_enable_mads_main, \
+                                      enable_auto_resume as subaru_enable_auto_resume
 from openpilot.selfdrive.pandad import can_capnp_to_list, can_list_to_can_capnp
 from openpilot.selfdrive.car.cruise import VCruiseHelper
 
@@ -126,6 +127,11 @@ class Car:
       # MADS anyway, so it is only ever set alongside it
       if self.params.get_bool("MadsMainSwitch"):
         subaru_enable_mads_main(self.CP)
+
+    # Auto resume fakes the resume button when the lead pulls away from a stop. The panda gates
+    # the send on this flag, so leaving it off removes the capability rather than only the sender.
+    if not self.CP.passive and self.CP.brand == 'subaru' and self.params.get_bool("SubaruAutoResume"):
+      subaru_enable_auto_resume(self.CP)
 
     if self.CP.secOcRequired:
       # Copy user key if available

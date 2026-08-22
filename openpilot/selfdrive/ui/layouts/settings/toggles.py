@@ -87,6 +87,11 @@ DESCRIPTIONS = {
     "EyeSight main is already on when the car starts, so tap the cruise button off and back on once openpilot is up. " +
     "Switching cruise off still stops steering."
   ),
+  "SubaruAutoResume": tr_noop(
+    "Pull away on your own when the car ahead does. At a stop the dash shows HOLD and waits for you to tap the gas or press RES. " +
+    "This presses RES for you once the car ahead has moved off. It only ever acts when there was a car ahead to follow, " +
+    "so nothing happens when you are first in line. EyeSight still controls the brakes and will stop again on its own."
+  ),
   "ReverseGearDebounce": tr_noop(
     "Shifting into park runs the lever through reverse on the way, and openpilot acts on that the instant it sees it, " +
     "so a take control alert fires while steering is still on. This makes it wait a tenth of a second first. " +
@@ -162,6 +167,13 @@ class TogglesLayout(Widget):
       "MadsMainSwitch": (
         lambda: tr("Steer With The Cruise Switch"),
         DESCRIPTIONS["MadsMainSwitch"],
+        "chffr_wheel.png",
+        # changes what the panda will allow, so it can only be applied at car init
+        True,
+      ),
+      "SubaruAutoResume": (
+        lambda: tr("Auto Resume From Stop"),
+        DESCRIPTIONS["SubaruAutoResume"],
         "chffr_wheel.png",
         # changes what the panda will allow, so it can only be applied at car init
         True,
