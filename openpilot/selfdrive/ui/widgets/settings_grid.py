@@ -72,9 +72,9 @@ POPUP_SHADOW = rl.Color(0, 0, 0, 130)
 # param, label, restarts openpilot when changed
 BOOL_SETTINGS = (
   ("MadsEnabled", "MADS", True),
-  ("MadsMainSwitch", "MADS main switch", True),
+  ("MadsMainSwitch", "Cruise switch", True),
   ("SubaruAutoResume", "Auto resume", True),
-  ("ReverseGearDebounce", "Reverse debounce", False),
+  ("ReverseGearDebounce", "Ignore reverse", False),
   ("IsLdwEnabled", "Lane departure warn", False),
   ("ShowLeadIndicator", "Lead marker", False),
   ("EngagementPathColor", "Path color by steer", False),
@@ -90,7 +90,7 @@ BOOL_SETTINGS = (
 # drive, and the top row is the easiest to hit both parked and over the camera
 CHOICE_SETTINGS = (
   ("BrightnessLevel", "Brightness", BRIGHTNESS_LEVELS, ("Auto", "25", "50", "75", "100")),
-  ("AutoLaneChangeTimer", "Auto lane change", AUTO_LANE_CHANGE_TIMERS, ("Nudge", "1s", "2s", "3s")),
+  ("AutoLaneChangeTimer", "Lane change", AUTO_LANE_CHANGE_TIMERS, ("Nudge", "1s", "2s", "3s")),
   ("BlinkerPauseSpeed", "Blinker pause", BLINKER_PAUSE_SPEEDS_MPH, ("Off", "20", "40", "Any")),
   ("BlinkerPauseDelay", "Resume delay", BLINKER_PAUSE_DELAYS, ("Now", "1s", "2s", "3s")),
   ("CurveAdvisory", "Curve warning", CURVE_ADVISORY_LEVELS, ("Off", "Late", "Norm", "Early")),
@@ -448,17 +448,24 @@ class SettingsGrid(Widget):
       x, y = self._slot_origin(rect, i, column_width)
 
       is_toggle = isinstance(control, RowToggle)
-      control_width = TOGGLE_HIT_WIDTH if is_toggle else control.width + DROPDOWN_HIT_EXTRA
+      drawn_width = TOGGLE_WIDTH if is_toggle else control.width
+      band_width = TOGGLE_HIT_WIDTH if is_toggle else control.width + DROPDOWN_HIT_EXTRA
 
       self._draw_label(param, x, y, control.enabled)
 
       # the controls sit just past the longest label rather than out at the column edge: the
       # driver sits to the left of this screen, so the far right is the worst place to reach.
-      # a column with no slack clamps back to the edge.
-      control_x = min(x + self._widest_label + LABEL_GAP, x + column_width - control_width)
+      # what has to fit in the column is the control as drawn, not the band of touch around it,
+      # or a narrow column pulls the control back over its own label to make room for a band
+      # that was never visible in the first place.
+      control_x = min(x + self._widest_label + LABEL_GAP, x + column_width - drawn_width)
 
-      # both controls take the whole row band, and place their own smaller visuals inside it
-      control.render(rl.Rectangle(control_x, y, control_width, self._row_height))
+      # the band may run past the column into the gap beside it, which is empty, but never as
+      # far as the next column's control
+      band_width = max(drawn_width, min(band_width, x + column_width + COLUMN_GAP - control_x))
+
+      # both controls take the whole band, and place their own smaller visuals inside it
+      control.render(rl.Rectangle(control_x, y, band_width, self._row_height))
 
     # last, so the list covers the rows rather than the rows covering the list
     if self._open_param is not None:
