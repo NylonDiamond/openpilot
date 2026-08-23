@@ -83,6 +83,9 @@ BOOL_SETTINGS = (
   ("AlwaysOnDM", "Always-on DM", False),
   ("DisengageOnAccelerator", "Disengage on gas", False),
   ("IsMetric", "Metric", False),
+  # temporary: fires one fake cancel press, to find out whether this car obeys an injected
+  # ES_Distance at all. it turns itself back off once the car code has taken the request
+  ("SubaruTestCancel", "Test cancel", False),
 )
 
 # param, label, stored values, button labels

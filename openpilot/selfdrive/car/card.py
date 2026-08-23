@@ -272,6 +272,15 @@ class Car:
     while not evt.is_set():
       self.is_metric = self.params.get_bool("IsMetric")
       self.experimental_mode = self.params.get_bool("ExperimentalMode") and self.CP.openpilotLongitudinalControl
+
+      # Hands a one-shot cancel to the Subaru controller, so the debug toggle acts like a
+      # button: read it, clear it, and let the controller send one pulse. The car code cannot
+      # read params itself, which is why it comes across here. Temporary, and only here to
+      # answer whether this car obeys an injected ES_Distance at all.
+      if self.CP.brand == 'subaru' and self.CI.CC is not None and self.params.get_bool("SubaruTestCancel"):
+        self.params.put_bool("SubaruTestCancel", False)
+        self.CI.CC.test_cancel_request = True
+
       time.sleep(0.1)
 
   def card_thread(self):
