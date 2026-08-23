@@ -87,6 +87,10 @@ class DebugPanel(Widget):
     self._button = DebugButton(self._toggle_open)
     self._grid = SettingsGrid(ALL_PARAMS, ROWS_PER_COLUMN, ROW_HEIGHT)
 
+    # an open option list covers whatever is under it, the button included, so the tap that
+    # picks a value must not also reach the button and shut the panel
+    self._button.set_touch_valid_callback(lambda: not self._grid.is_popup_open)
+
     assert self._grid.columns == 2, "the panel is laid out for two columns"
     assert len(ALL_PARAMS) < 2 * ROWS_PER_COLUMN, "the last slot has to stay free for the button"
 
@@ -104,6 +108,8 @@ class DebugPanel(Widget):
     self._open = not self._open
     if self._open:
       self._grid.refresh()
+    else:
+      self._grid.close_popup()
 
   def _update_layout_rects(self) -> None:
     height = ROWS_PER_COLUMN * ROW_HEIGHT + HEADER_HEIGHT + 2 * PANEL_PADDING
@@ -136,6 +142,9 @@ class DebugPanel(Widget):
     if not ui_state.show_debug_panel:
       self._open = False
 
+    if not self._open:
+      self._grid.close_popup()
+
     self._button.set_open(self._open)
 
   def _render(self, rect: rl.Rectangle) -> None:
@@ -148,9 +157,12 @@ class DebugPanel(Widget):
       rl.draw_rectangle_rounded(self._panel_rect, 0.03, 20, PANEL_BG)
       rl.draw_rectangle_rounded_lines_ex(self._panel_rect, 0.03, 20, 2, PANEL_BORDER)
       self._draw_header()
+      # the button goes down before the grid, so an option list opened near it draws over it
+      # rather than under it
+      self._button.render()
       self._grid.render(self._grid_rect)
-
-    self._button.render()
+    else:
+      self._button.render()
 
   def _draw_header(self) -> None:
     x = self._panel_rect.x + PANEL_PADDING
@@ -165,5 +177,7 @@ class DebugPanel(Widget):
   def _handle_mouse_press(self, mouse_pos: MousePos) -> None:
     if self._open:
       self._consumed_press = True
-      if not rl.check_collision_point_rec(mouse_pos, self._panel_rect):
+      # an option list may hang outside the panel, so while one is up a press out there is
+      # aimed at the list and closing the whole panel would be the wrong answer
+      if not self._grid.is_popup_open and not rl.check_collision_point_rec(mouse_pos, self._panel_rect):
         self._open = False
