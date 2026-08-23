@@ -4,7 +4,8 @@ import pyray as rl
 from enum import IntEnum
 from openpilot.common.params import Params
 from openpilot.selfdrive.ui.widgets.offroad_alerts import UpdateAlert, OffroadAlert
-from openpilot.selfdrive.ui.widgets.settings_grid import DISPLAY_PARAMS, DRIVING_PARAMS, SettingsGrid, SettingsTabs
+from openpilot.selfdrive.ui.widgets.settings_grid import (DISPLAY_PARAMS, DRIVING_PARAMS, OTHER_PARAMS,
+                                                          SettingsGrid, SettingsTabs)
 from openpilot.selfdrive.ui.widgets.status_bar import StatusBar
 from openpilot.selfdrive.ui.ui_state import ui_state
 from openpilot.system.ui.lib.text_measure import measure_text_cached
@@ -27,7 +28,8 @@ REFRESH_INTERVAL = 10.0
 SETTINGS_COLUMNS = 3
 DRIVING_ROWS = math.ceil(len(DRIVING_PARAMS) / SETTINGS_COLUMNS)
 DISPLAY_ROWS = math.ceil(len(DISPLAY_PARAMS) / SETTINGS_COLUMNS)
-SETTINGS_TAB_LABELS = ("DRIVING", "UI")
+OTHER_ROWS = math.ceil(len(OTHER_PARAMS) / SETTINGS_COLUMNS)
+SETTINGS_TAB_LABELS = ("DRIVING", "UI", "OTHER")
 # the row height is worked out from what the page actually has, rather than fixed. a fixed one
 # is how the switch row ended up off the bottom of the screen the moment a setting was added:
 # nothing checked that the rows still fit. rows shrink instead now, down to a floor that is
@@ -72,11 +74,12 @@ class HomeLayout(Widget):
     self.alert_notif_rect = rl.Rectangle(0, 0, 220, HEADER_HEIGHT - 10)
 
     # the home screen is where a drive gets set up, so what changes how the car drives leads.
-    # what only changes how the screen looks sits behind the second tab rather than in the menu,
-    # because a display setting is judged by looking at the screen it changes.
+    # the other two sit behind their own tab rather than in the menu, because a display setting
+    # is judged by looking at the screen it changes, and the rest are still worth one tap.
     self._settings_grids = (
       self._child(SettingsGrid(DRIVING_PARAMS, DRIVING_ROWS)),
       self._child(SettingsGrid(DISPLAY_PARAMS, DISPLAY_ROWS)),
+      self._child(SettingsGrid(OTHER_PARAMS, OTHER_ROWS)),
     )
     self._settings_tabs = self._child(SettingsTabs(SETTINGS_TAB_LABELS, self._select_settings_tab))
     # an open option list draws over the title row, so the tap that picks a value must not also
