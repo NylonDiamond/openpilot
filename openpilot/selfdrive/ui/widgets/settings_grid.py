@@ -57,6 +57,12 @@ TOGGLE_HIT_WIDTH = 320
 LABEL_FONT_SIZE = 38
 VALUE_FONT_SIZE = 32
 
+# the tabs that pick which grid a page shows. they ride on a title row, so they are shorter than
+# a dropdown button and lean on the row's own height for the rest of the tap target
+TAB_HEIGHT = 56
+TAB_PAD = 30
+TAB_GAP = 10
+
 LABEL_COLOR = rl.Color(228, 228, 228, 255)
 LABEL_DISABLED_COLOR = rl.Color(120, 120, 120, 255)
 SEG_SELECTED = rl.Color(51, 171, 76, 255)
@@ -81,6 +87,11 @@ BOOL_SETTINGS = (
   ("EngagementPathColor", "Path color by steer", False),
   ("HideExperimentalButton", "Hide exp button", False),
   ("WideCameraLowSpeed", "Wide cam low speed", False),
+  ("ShowTurnSignals", "Turn arrows", False),
+  ("ShowStockBrake", "Brake bar", False),
+  ("ShowBlindSpot", "Blind spot bars", False),
+  ("ShowSteeringOnly", "Steering badge", False),
+  ("ShowHomeStatus", "Home status", False),
   ("AlwaysOnDM", "Always-on DM", False),
   ("DisengageOnAccelerator", "Disengage on gas", False),
   ("IsMetric", "Metric", False),
@@ -103,7 +114,9 @@ CHOICE_SETTINGS = (
 DRIVING_PARAMS = tuple(s[0] for s in CHOICE_SETTINGS) + ("MadsEnabled", "MadsMainSwitch", "AutoVehicleHold",
                                                          "DisableStopStart", "ReverseGearDebounce")
 
-# and what only changes how the screen looks
+# and what only changes how the screen looks. ShowDebugPanel is deliberately not here: it is the
+# switch for the driving overlay, and putting it inside that overlay is a door that locks behind
+# you. It stays in the settings menu, which is reachable either way.
 DISPLAY_PARAMS = tuple(s[0] for s in BOOL_SETTINGS if s[0] not in DRIVING_PARAMS)
 
 ALL_PARAMS = DRIVING_PARAMS + DISPLAY_PARAMS
@@ -289,6 +302,61 @@ class DropdownList(Widget):
         self._on_select(i)
         return
     self._on_close()
+
+
+class SettingsTabs(Widget):
+  """Pills that pick which grid a page is showing.
+
+  Two grids in the same place need something to say which one is up. Tabs rather than a second
+  page because both sets are short enough to fit, so the only cost of switching is the tap, and
+  the answer to "where did that setting go" stays visible on screen.
+  """
+
+  def __init__(self, labels: tuple[str, ...], on_select: Callable[[int], None], selected: int = 0):
+    super().__init__()
+    self._labels = labels
+    self._on_select = on_select
+    self._selected = selected
+    self._font = gui_app.font(FontWeight.MEDIUM)
+
+    # every pill takes the width of the widest label, so switching does not shuffle them
+    widest = max(measure_text_cached(self._font, label, VALUE_FONT_SIZE).x for label in labels)
+    self._pill_width = int(widest + 2 * TAB_PAD)
+    self._natural_width = len(labels) * self._pill_width + (len(labels) - 1) * TAB_GAP
+
+  @property
+  def natural_width(self) -> int:
+    return self._natural_width
+
+  @property
+  def selected(self) -> int:
+    return self._selected
+
+  def set_selected(self, index: int) -> None:
+    self._selected = index
+
+  def _pill_rect(self, index: int) -> rl.Rectangle:
+    return rl.Rectangle(self._rect.x + index * (self._pill_width + TAB_GAP),
+                        self._rect.y + (self._rect.height - TAB_HEIGHT) / 2,
+                        self._pill_width, TAB_HEIGHT)
+
+  def _render(self, _: rl.Rectangle) -> None:
+    for i, label in enumerate(self._labels):
+      pill = self._pill_rect(i)
+      color = SEG_SELECTED if i == self._selected else SEG_BG
+      rl.draw_rectangle_rounded(pill, 1.0, 20, color)
+
+      size = measure_text_cached(self._font, label, VALUE_FONT_SIZE)
+      pos = rl.Vector2(pill.x + (pill.width - size.x) / 2, pill.y + (pill.height - size.y) / 2)
+      rl.draw_text_ex(self._font, label, pos, VALUE_FONT_SIZE, 0, SEG_TEXT)
+
+  def _handle_mouse_release(self, mouse_pos: MousePos) -> None:
+    for i in range(len(self._labels)):
+      if rl.check_collision_point_rec(mouse_pos, self._pill_rect(i)):
+        if i != self._selected:
+          self._selected = i
+          self._on_select(i)
+        return
 
 
 class SettingsGrid(Widget):
