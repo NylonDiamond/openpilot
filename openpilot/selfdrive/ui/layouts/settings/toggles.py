@@ -129,6 +129,28 @@ DESCRIPTIONS = {
     "a setting against the piece of road that raised the question. " +
     "Turn it off to get the corner of the screen back once the testing is done."
   ),
+  "ShowTurnSignals": tr_noop(
+    "Show an arrow either side of your speed while a turn signal is on. " +
+    "The stock driving screen has no turn signal readout at all, so nothing there says the signal is still running."
+  ),
+  "ShowStockBrake": tr_noop(
+    "Show a bar under your speed when the stock system is braking, filling as the braking gets harder. " +
+    "openpilot does not control the brakes on this car, so without this nothing on screen reports that EyeSight is slowing you down."
+  ),
+  "ShowBlindSpot": tr_noop(
+    "Light a bar down the side of the screen while the blind spot monitor sees something there, " +
+    "and tint that side's turn signal arrow to match. " +
+    "An occupied blind spot is also the reason an automatic lane change will sit there and never start."
+  ),
+  "ShowSteeringOnly": tr_noop(
+    "Show a badge under the set speed while openpilot is steering with no stock cruise underneath it. " +
+    "This only happens with the steering toggles on. Without the badge the screen looks the same whether or not " +
+    "anything is managing your speed."
+  ),
+  "ShowHomeStatus": tr_noop(
+    "Show the readiness summary beside the SETTINGS title on the home screen: drive count, calibration, and the learned steering delay. " +
+    "It shares the title line, so hiding it frees no space on the screen."
+  ),
   "AlwaysOnDM": tr_noop("Enable driver monitoring even when openpilot is not engaged."),
   'RecordFront': tr_noop("Upload data from the cabin camera and help improve the driver monitoring algorithm."),
   "IsMetric": tr_noop("Display speed in km/h instead of mph."),
@@ -229,6 +251,38 @@ class TogglesLayout(Widget):
       "ShowDebugPanel": (
         lambda: tr("Settings Button While Driving"),
         DESCRIPTIONS["ShowDebugPanel"],
+        "settings.png",
+        False,
+      ),
+      # the car indicator overlay, one switch per element. these report the car's own state rather
+      # than openpilot's, so unlike the group above they mean something at any level of control.
+      "ShowTurnSignals": (
+        lambda: tr("Show Turn Signal Arrows"),
+        DESCRIPTIONS["ShowTurnSignals"],
+        "road.png",
+        False,
+      ),
+      "ShowStockBrake": (
+        lambda: tr("Show Stock Braking Bar"),
+        DESCRIPTIONS["ShowStockBrake"],
+        "warning.png",
+        False,
+      ),
+      "ShowBlindSpot": (
+        lambda: tr("Show Blind Spot Bars"),
+        DESCRIPTIONS["ShowBlindSpot"],
+        "warning.png",
+        False,
+      ),
+      "ShowSteeringOnly": (
+        lambda: tr("Show Steering Only Badge"),
+        DESCRIPTIONS["ShowSteeringOnly"],
+        "chffr_wheel.png",
+        False,
+      ),
+      "ShowHomeStatus": (
+        lambda: tr("Show Home Screen Status"),
+        DESCRIPTIONS["ShowHomeStatus"],
         "settings.png",
         False,
       ),

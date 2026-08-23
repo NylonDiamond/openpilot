@@ -100,6 +100,14 @@ class UIState:
     self.wide_camera_low_speed: bool = self.params.get_bool("WideCameraLowSpeed")
     # the settings shortcut on the driving screen
     self.show_debug_panel: bool = self.params.get_bool("ShowDebugPanel")
+    # the onroad car indicator overlay, one flag per element. these report the car's own state
+    # rather than openpilot's, so they are purely a matter of what is worth looking at.
+    self.show_turn_signals: bool = self.params.get_bool("ShowTurnSignals")
+    self.show_stock_brake: bool = self.params.get_bool("ShowStockBrake")
+    self.show_blind_spot: bool = self.params.get_bool("ShowBlindSpot")
+    self.show_steering_only: bool = self.params.get_bool("ShowSteeringOnly")
+    # the readiness summary on the home screen
+    self.show_home_status: bool = self.params.get_bool("ShowHomeStatus")
     self.is_body: bool | None = False
     self.CP: car.CarParams | None = None
     self.light_sensor: float = -1.0
@@ -226,6 +234,11 @@ class UIState:
     self.hide_experimental_button = self.params.get_bool("HideExperimentalButton")
     self.wide_camera_low_speed = self.params.get_bool("WideCameraLowSpeed")
     self.show_debug_panel = self.params.get_bool("ShowDebugPanel")
+    self.show_turn_signals = self.params.get_bool("ShowTurnSignals")
+    self.show_stock_brake = self.params.get_bool("ShowStockBrake")
+    self.show_blind_spot = self.params.get_bool("ShowBlindSpot")
+    self.show_steering_only = self.params.get_bool("ShowSteeringOnly")
+    self.show_home_status = self.params.get_bool("ShowHomeStatus")
     # keep usbgpu UI active until offroad transition when gpu disappears
     self.usbgpu = self.sm["deviceState"].chestnutPresent or (self.usbgpu and self.started)
     if not self.usbgpu_compiled:

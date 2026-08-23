@@ -6,6 +6,7 @@ from openpilot.common.params import Params
 from openpilot.selfdrive.ui.widgets.offroad_alerts import UpdateAlert, OffroadAlert
 from openpilot.selfdrive.ui.widgets.settings_grid import DRIVING_PARAMS, SettingsGrid
 from openpilot.selfdrive.ui.widgets.status_bar import StatusBar
+from openpilot.selfdrive.ui.ui_state import ui_state
 from openpilot.system.ui.lib.text_measure import measure_text_cached
 from openpilot.system.ui.lib.application import gui_app, FontWeight, MousePos
 from openpilot.system.ui.lib.multilang import tr, trn
@@ -87,7 +88,8 @@ class HomeLayout(Widget):
     if state != self.current_state:
       if state == HomeLayoutState.HOME:
         self._settings_grid.refresh()
-        self._status_bar.refresh()
+        if ui_state.show_home_status:
+          self._status_bar.refresh()
 
       if state in self._layout_widgets:
         self._layout_widgets[state].show_event()
@@ -179,8 +181,9 @@ class HomeLayout(Widget):
 
     # the readiness summary rides beside the title on the same line, and drops its own tail when
     # what the title leaves is not enough for every fact
-    status_x = rect.x + measure_text_cached(gui_app.font(FontWeight.BOLD), title, COLUMN_TITLE_FONT_SIZE).x + SPACING * 2
-    self._status_bar.render(rl.Rectangle(status_x, rect.y, max(0.0, rect.x + rect.width - status_x), COLUMN_TITLE_HEIGHT))
+    if ui_state.show_home_status:
+      status_x = rect.x + measure_text_cached(gui_app.font(FontWeight.BOLD), title, COLUMN_TITLE_FONT_SIZE).x + SPACING * 2
+      self._status_bar.render(rl.Rectangle(status_x, rect.y, max(0.0, rect.x + rect.width - status_x), COLUMN_TITLE_HEIGHT))
 
     grid_rect = rl.Rectangle(rect.x, rect.y + COLUMN_TITLE_HEIGHT, rect.width, rect.height - COLUMN_TITLE_HEIGHT)
     row_height = min(SETTINGS_ROW_MAX_HEIGHT, max(SETTINGS_ROW_MIN_HEIGHT, grid_rect.height / SETTINGS_ROWS))
@@ -196,7 +199,8 @@ class HomeLayout(Widget):
   def _refresh(self):
     self._version_text = self._get_version_text()
     self._settings_grid.refresh()
-    self._status_bar.refresh()
+    if ui_state.show_home_status:
+      self._status_bar.refresh()
     update_available = self.update_alert.refresh()
     alert_count = self.offroad_alert.refresh()
     alerts_present = alert_count > 0
