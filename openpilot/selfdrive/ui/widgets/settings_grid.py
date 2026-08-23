@@ -73,7 +73,6 @@ POPUP_SHADOW = rl.Color(0, 0, 0, 130)
 BOOL_SETTINGS = (
   ("MadsEnabled", "MADS", True),
   ("MadsMainSwitch", "Cruise switch", True),
-  ("SubaruAutoResume", "Auto resume", True),
   ("ReverseGearDebounce", "Ignore reverse", False),
   ("IsLdwEnabled", "Lane departure warn", False),
   ("ShowLeadIndicator", "Lead marker", False),
@@ -83,9 +82,6 @@ BOOL_SETTINGS = (
   ("AlwaysOnDM", "Always-on DM", False),
   ("DisengageOnAccelerator", "Disengage on gas", False),
   ("IsMetric", "Metric", False),
-  # temporary: fires one fake cancel press, to find out whether this car obeys an injected
-  # ES_Distance at all. it turns itself back off once the car code has taken the request
-  ("SubaruTestCancel", "Test cancel", False),
 )
 
 # param, label, stored values, button labels
@@ -102,7 +98,7 @@ CHOICE_SETTINGS = (
 
 # what changes how the car drives. this is the set worth having on the home screen, where the
 # question is what to try on the next drive rather than what to change during one
-DRIVING_PARAMS = tuple(s[0] for s in CHOICE_SETTINGS) + ("MadsEnabled", "MadsMainSwitch", "SubaruAutoResume", "ReverseGearDebounce")
+DRIVING_PARAMS = tuple(s[0] for s in CHOICE_SETTINGS) + ("MadsEnabled", "MadsMainSwitch", "ReverseGearDebounce")
 
 # and what only changes how the screen looks
 DISPLAY_PARAMS = tuple(s[0] for s in BOOL_SETTINGS if s[0] not in DRIVING_PARAMS)
