@@ -1,9 +1,9 @@
 """A compact grid of the fork's settings, laid out in columns.
 
-The settings menu is the place to read about a setting. This is the place to change one you
-already understand, either parked on the home screen or over the camera while driving, so a
-change can be judged against the road that raised the question. Labels are terse and
-untranslated for the same reason: they are reminders, not explanations.
+This is the place to change a setting, either parked on the home screen or over the camera while
+driving, so a change can be judged against the road that raised the question. Labels are terse
+and untranslated for that reason: they are reminders, not explanations. Tapping one puts the
+full explanation on screen, which is the same text the settings menu carries.
 """
 
 import math
@@ -14,10 +14,13 @@ import pyray as rl
 from openpilot.common.params import Params
 from openpilot.selfdrive.controls.lib.blinker_pause import ANY_SPEED_MPH, BLINKER_PAUSE_SPEEDS_MPH
 from openpilot.selfdrive.controls.lib.lane_position import LANE_POSITION_OFFSETS_CM
-from openpilot.selfdrive.ui.layouts.settings.toggles import AUTO_LANE_CHANGE_TIMERS, BLINKER_PAUSE_DELAYS, CURVE_ADVISORY_LEVELS
+from openpilot.selfdrive.ui.layouts.settings.toggles import (AUTO_LANE_CHANGE_TIMERS, BLINKER_PAUSE_DELAYS,
+                                                             CURVE_ADVISORY_LEVELS, DESCRIPTIONS)
 from openpilot.selfdrive.ui.ui_state import BRIGHTNESS_LEVELS, device, ui_state
 from openpilot.system.ui.lib.application import FontWeight, MousePos, gui_app
+from openpilot.system.ui.lib.multilang import tr
 from openpilot.system.ui.lib.text_measure import measure_text_cached
+from openpilot.system.ui.lib.wrap_text import wrap_text
 from openpilot.system.ui.widgets import Widget
 from openpilot.system.ui.widgets.toggle import Toggle
 
@@ -57,6 +60,19 @@ TOGGLE_HIT_WIDTH = 320
 LABEL_FONT_SIZE = 38
 VALUE_FONT_SIZE = 32
 
+# the card that explains a setting. it is read standing still, so it is sized for reading rather
+# than for the room left over: as wide as the screen allows, up to a line length that stays easy
+# to follow.
+INFO_MAX_WIDTH = 1400
+INFO_MARGIN = 60
+INFO_PAD = 44
+INFO_TITLE_FONT_SIZE = 46
+INFO_BODY_FONT_SIZE = 34
+INFO_LINE_HEIGHT = 46
+INFO_TITLE_GAP = 32
+INFO_HINT_GAP = 28
+INFO_HINT_FONT_SIZE = 28
+
 # the tabs that pick which grid a page shows. they ride on a title row, so they are shorter than
 # a dropdown button and lean on the row's own height for the rest of the tap target
 TAB_HEIGHT = 56
@@ -74,6 +90,9 @@ SEG_TEXT_DISABLED = rl.Color(130, 130, 130, 255)
 POPUP_BG = rl.Color(44, 44, 46, 255)
 POPUP_BORDER = rl.Color(255, 255, 255, 55)
 POPUP_SHADOW = rl.Color(0, 0, 0, 130)
+POPUP_SCRIM = rl.Color(0, 0, 0, 170)
+INFO_BODY_COLOR = rl.Color(202, 202, 202, 255)
+INFO_HINT_COLOR = rl.Color(130, 130, 130, 255)
 
 # param, label, restarts openpilot when changed
 BOOL_SETTINGS = (
@@ -304,6 +323,66 @@ class DropdownList(Widget):
     self._on_close()
 
 
+class InfoPopup(Widget):
+  """What a setting actually does, on a card over the page.
+
+  The grid labels are short enough to be read at a glance, which also makes several of them
+  meaningless on their own. This carries the settings menu's own wording, so the compact grid
+  stops depending on having read the menu first.
+
+  Like the option list, it takes the whole screen as its rect, so any tap closes it and no tap
+  reaches whatever it is covering.
+  """
+
+  def __init__(self):
+    super().__init__()
+    self._title_font = gui_app.font(FontWeight.BOLD)
+    self._body_font = gui_app.font(FontWeight.MEDIUM)
+    self._title = ""
+    self._body = ""
+    self._on_close: Callable[[], None] = lambda: None
+
+  def open(self, title: str, body: str, on_close: Callable[[], None]) -> None:
+    self._title = title
+    self._body = body
+    self._on_close = on_close
+
+  def _wrapped(self, width: float) -> list[str]:
+    return wrap_text(self._body_font, self._body, INFO_BODY_FONT_SIZE, int(width - 2 * INFO_PAD))
+
+  def _card_rect(self) -> tuple[rl.Rectangle, list[str]]:
+    width = min(INFO_MAX_WIDTH, gui_app.width - 2 * INFO_MARGIN)
+    lines = self._wrapped(width)
+    height = (2 * INFO_PAD + INFO_TITLE_FONT_SIZE + INFO_TITLE_GAP + len(lines) * INFO_LINE_HEIGHT
+              + INFO_HINT_GAP + INFO_HINT_FONT_SIZE)
+    height = min(height, gui_app.height - 2 * INFO_MARGIN)
+    return rl.Rectangle((gui_app.width - width) / 2, (gui_app.height - height) / 2, width, height), lines
+
+  def _render(self, _: rl.Rectangle) -> None:
+    # the page underneath is a grid of controls, so it has to go dim: a card floating over live
+    # switches reads as one more thing to press
+    rl.draw_rectangle(0, 0, gui_app.width, gui_app.height, POPUP_SCRIM)
+
+    card, lines = self._card_rect()
+    rl.draw_rectangle_rounded(card, 0.05, 20, POPUP_BG)
+    rl.draw_rectangle_rounded_lines_ex(card, 0.05, 20, 2, POPUP_BORDER)
+
+    x = card.x + INFO_PAD
+    y = card.y + INFO_PAD
+    rl.draw_text_ex(self._title_font, self._title, rl.Vector2(x, y), INFO_TITLE_FONT_SIZE, 0, LABEL_COLOR)
+    y += INFO_TITLE_FONT_SIZE + INFO_TITLE_GAP
+
+    for line in lines:
+      rl.draw_text_ex(self._body_font, line, rl.Vector2(x, y), INFO_BODY_FONT_SIZE, 0, INFO_BODY_COLOR)
+      y += INFO_LINE_HEIGHT
+
+    hint = tr("tap anywhere to close")
+    rl.draw_text_ex(self._body_font, hint, rl.Vector2(x, y + INFO_HINT_GAP), INFO_HINT_FONT_SIZE, 0, INFO_HINT_COLOR)
+
+  def _handle_mouse_release(self, _: MousePos) -> None:
+    self._on_close()
+
+
 class SettingsTabs(Widget):
   """Pills that pick which grid a page is showing.
 
@@ -393,10 +472,18 @@ class SettingsGrid(Widget):
     self._open_param: str | None = None
     self._popup = DropdownList()
 
-    # while a list is open nothing else may take a touch, or the tap that picks a value also
-    # lands on whatever row the list happens to be covering
+    # tapping a label explains that setting. the rects are whatever the last frame drew, since
+    # the row height and the column width both depend on the page the grid is on
+    self._label_rects: dict[str, rl.Rectangle] = {}
+    self._info = InfoPopup()
+    self._info_param: str | None = None
+    # a card put away by this frame's tap must not let the same tap open another one
+    self._popup_was_open = False
+
+    # while anything is up over the grid nothing else may take a touch, or the tap that picks a
+    # value also lands on whatever row it happens to be covering
     for control in self._controls.values():
-      control.set_touch_valid_callback(lambda: self._open_param is None)
+      control.set_touch_valid_callback(lambda: not self.is_popup_open)
 
     # one button width for every dropdown, so they line up down a column
     self._button_width = max((d.natural_width for d in self._dropdowns.values()), default=0)
@@ -416,8 +503,8 @@ class SettingsGrid(Widget):
 
   @property
   def is_popup_open(self) -> bool:
-    """True while an option list is up, so a container can leave the touch to it."""
-    return self._open_param is not None
+    """True while anything is up over the grid, so a container can leave the touch to it."""
+    return self._open_param is not None or self._info_param is not None
 
   def height_hint(self) -> float:
     return self.rows * self._row_height
@@ -437,16 +524,18 @@ class SettingsGrid(Widget):
     self._close_dropdown()
 
   def close_popup(self) -> None:
-    """Put any open option list away. A container that hides the grid has to call this.
+    """Put any open list or card away. A container that hides the grid has to call this.
 
-    An open list is what stops everything else answering to touch, so one left open behind a
+    Either one is what stops everything else answering to touch, so one left open behind a
     hidden grid would lock out whatever brings the grid back.
     """
     self._close_dropdown()
+    self._close_info()
 
   def refresh(self) -> None:
     """Pull every control back from params, so the grid never shows a stale value."""
     self._close_dropdown()
+    self._close_info()
     for param, toggle in self._toggles.items():
       toggle.set_state(self._params.get_bool(param))
     for param, dropdown in self._dropdowns.items():
@@ -469,6 +558,14 @@ class SettingsGrid(Widget):
     if self._open_param is not None:
       self._dropdowns[self._open_param].set_open(False)
       self._open_param = None
+
+  def _open_info(self, param: str) -> None:
+    self._close_dropdown()
+    self._info_param = param
+    self._info.open(self._labels[param], tr(DESCRIPTIONS[param]), self._close_info)
+
+  def _close_info(self) -> None:
+    self._info_param = None
 
   def _pick_choice(self, param: str, index: int) -> None:
     self._dropdowns[param].set_selected(index)
@@ -511,6 +608,8 @@ class SettingsGrid(Widget):
       self._close_dropdown()
 
   def _render(self, rect: rl.Rectangle) -> None:
+    # read before anything opened by this frame's tap, and before anything closed by it
+    self._popup_was_open = self.is_popup_open
     column_width = self.column_width(rect.width)
 
     for i, param in enumerate(self._param_names):
@@ -534,12 +633,30 @@ class SettingsGrid(Widget):
       # far as the next column's control
       band_width = max(drawn_width, min(band_width, x + column_width + COLUMN_GAP - control_x))
 
+      # the label answers to everything from the left edge of the row up to the control's own
+      # band. reading a setting is done standing still, so this is a generous target that can
+      # afford to be: it never reaches the control, so it cannot swallow a tap meant for one
+      self._label_rects[param] = rl.Rectangle(x, y, max(0.0, control_x - x), self._row_height)
+
       # both controls take the whole band, and place their own smaller visuals inside it
       control.render(rl.Rectangle(control_x, y, band_width, self._row_height))
 
-    # last, so the list covers the rows rather than the rows covering the list
-    if self._open_param is not None:
+    # last, so what is up covers the rows rather than the rows covering it
+    if self._info_param is not None:
+      self._info.render(rl.Rectangle(0, 0, gui_app.width, gui_app.height))
+    elif self._open_param is not None:
       self._popup.render(rl.Rectangle(0, 0, gui_app.width, gui_app.height))
+
+  def _handle_mouse_release(self, mouse_pos: MousePos) -> None:
+    # the card and the option list both draw over the rows, so while one is up its own tap has
+    # already been dealt with by the time this runs
+    if self._popup_was_open:
+      return
+
+    for param, label_rect in self._label_rects.items():
+      if param in DESCRIPTIONS and rl.check_collision_point_rec(mouse_pos, label_rect):
+        self._open_info(param)
+        return
 
   def _slot_origin(self, rect: rl.Rectangle, slot: int, column_width: float) -> tuple[float, float]:
     return (rect.x + (slot // self._rows_per_column) * (column_width + COLUMN_GAP),

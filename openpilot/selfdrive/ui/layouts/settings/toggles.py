@@ -151,6 +151,13 @@ DESCRIPTIONS = {
     "Show the readiness summary beside the SETTINGS title on the home screen: drive count, calibration, and the learned steering delay. " +
     "It shares the title line, so hiding it frees no space on the screen."
   ),
+  # not a toggle on this page, but the compact grid shows it and every setting there has to be
+  # able to explain itself
+  "BrightnessLevel": tr_noop(
+    "How bright the screen is. Auto follows the light sensor, which is what openpilot ships with. " +
+    "The fixed levels hold the same brightness day and night, so the screen does not dim in a tunnel " +
+    "or blind you after dark."
+  ),
   "AlwaysOnDM": tr_noop("Enable driver monitoring even when openpilot is not engaged."),
   'RecordFront': tr_noop("Upload data from the cabin camera and help improve the driver monitoring algorithm."),
   "IsMetric": tr_noop("Display speed in km/h instead of mph."),
