@@ -112,13 +112,19 @@ class CarIndicators(Widget):
       self._bsm_right = False
       return
 
+    # each element is switchable on its own. feeding a disabled one its off value rather than
+    # skipping the draw lets it fade out the way it normally would, and keeps draw() a pure
+    # function of its arguments for the preview harness.
     car_state = sm['carState']
-    self._left = car_state.leftBlinker
-    self._right = car_state.rightBlinker
-    self._brake = car_state.stockBrakeCommand
-    self._lat_only = car_state.cruiseState.enabled and not car_state.stockCruiseEngaged
-    self._bsm_left = car_state.leftBlindspot
-    self._bsm_right = car_state.rightBlindspot
+    signals = ui_state.show_turn_signals
+    self._left = car_state.leftBlinker and signals
+    self._right = car_state.rightBlinker and signals
+    self._brake = car_state.stockBrakeCommand if ui_state.show_stock_brake else 0.0
+    self._lat_only = (car_state.cruiseState.enabled and not car_state.stockCruiseEngaged
+                      and ui_state.show_steering_only)
+    blind_spot = ui_state.show_blind_spot
+    self._bsm_left = car_state.leftBlindspot and blind_spot
+    self._bsm_right = car_state.rightBlindspot and blind_spot
 
   def _render(self, rect: rl.Rectangle) -> None:
     self.draw(rect, self._left, self._right, self._brake, self._lat_only, self._bsm_left, self._bsm_right)
