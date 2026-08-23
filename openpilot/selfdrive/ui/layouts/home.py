@@ -1,3 +1,4 @@
+import math
 import time
 import pyray as rl
 from enum import IntEnum
@@ -18,15 +19,17 @@ SPACING = 25
 VERSION_FONT_SIZE = 48
 REFRESH_INTERVAL = 10.0
 
-# the settings grid is one column here, so every driving setting has to fit down the page. the
-# three switches share the last row, which leaves seven rows to fill it, and 118 spends the
-# height that buys back on the tap targets rather than on empty page
-INLINE_SWITCHES = 3
-SETTINGS_ROWS = len(DRIVING_PARAMS) - INLINE_SWITCHES + 1
-SETTINGS_ROW_HEIGHT = 118
-# the compact switch row leaves the page wider than the pills need, so they take the slack
-# rather than leaving it empty beside them
-SETTINGS_BUTTON_WIDTH = 300
+# two columns, which is what the compact controls bought: a choice is one button now rather than
+# a row of pills, so a setting no longer needs the width of the page to itself. the page is wide
+# and short, so splitting sideways is where the room is.
+SETTINGS_COLUMNS = 2
+SETTINGS_ROWS = math.ceil(len(DRIVING_PARAMS) / SETTINGS_COLUMNS)
+# the row height is worked out from what the page actually has, rather than fixed. a fixed one
+# is how the switch row ended up off the bottom of the screen the moment a setting was added:
+# nothing checked that the rows still fit. rows shrink instead now, down to a floor that is
+# still a fair tap target, and stop growing before the page reads as mostly empty.
+SETTINGS_ROW_MIN_HEIGHT = 92
+SETTINGS_ROW_MAX_HEIGHT = 150
 COLUMN_TITLE_HEIGHT = 66
 COLUMN_TITLE_FONT_SIZE = 44
 
@@ -64,9 +67,7 @@ class HomeLayout(Widget):
 
     # the home screen is where a drive gets set up, so it carries what changes how the car
     # drives. the rest of the settings stay one tap away in the overlay and in the menu.
-    self._settings_grid = self._child(SettingsGrid(DRIVING_PARAMS, SETTINGS_ROWS, SETTINGS_ROW_HEIGHT,
-                                                   inline_tail=INLINE_SWITCHES,
-                                                   max_button_width=SETTINGS_BUTTON_WIDTH))
+    self._settings_grid = self._child(SettingsGrid(DRIVING_PARAMS, SETTINGS_ROWS))
     # the readiness summary shares the settings title row, so it costs no height of its own
     self._status_bar = self._child(StatusBar())
     self._setup_callbacks()
@@ -180,8 +181,10 @@ class HomeLayout(Widget):
     status_x = rect.x + measure_text_cached(gui_app.font(FontWeight.BOLD), title, COLUMN_TITLE_FONT_SIZE).x + SPACING * 2
     self._status_bar.render(rl.Rectangle(status_x, rect.y, max(0.0, rect.x + rect.width - status_x), COLUMN_TITLE_HEIGHT))
 
-    self._settings_grid.render(rl.Rectangle(rect.x, rect.y + COLUMN_TITLE_HEIGHT, rect.width,
-                                            rect.height - COLUMN_TITLE_HEIGHT))
+    grid_rect = rl.Rectangle(rect.x, rect.y + COLUMN_TITLE_HEIGHT, rect.width, rect.height - COLUMN_TITLE_HEIGHT)
+    row_height = min(SETTINGS_ROW_MAX_HEIGHT, max(SETTINGS_ROW_MIN_HEIGHT, grid_rect.height / SETTINGS_ROWS))
+    self._settings_grid.set_row_height(row_height)
+    self._settings_grid.render(grid_rect)
 
   def _render_update_view(self):
     self.update_alert.render(self.content_rect)
