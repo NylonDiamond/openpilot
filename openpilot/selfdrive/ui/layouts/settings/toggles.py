@@ -87,6 +87,16 @@ DESCRIPTIONS = {
     "EyeSight main is already on when the car starts, so tap the cruise button off and back on once openpilot is up. " +
     "Switching cruise off still stops steering."
   ),
+  "AutoVehicleHold": tr_noop(
+    "Switch Auto Vehicle Hold on by itself at the start of a drive, so the brakes hold at a stop without you keeping your foot down. " +
+    "The car forgets this setting every time you switch it off, which is the only reason openpilot touches it. " +
+    "It asks once, a few seconds in, and only if hold is off. After that the button on the touchscreen always wins."
+  ),
+  "DisableStopStart": tr_noop(
+    "Switch the auto start-stop engine shutoff off by itself at the start of a drive, so the engine keeps running at a stop. " +
+    "This is the same press as the (A) button on the touchscreen, which the car re-arms every time you start it. " +
+    "It presses once, a few seconds in, and only if the shutoff is still armed."
+  ),
   "ReverseGearDebounce": tr_noop(
     "Shifting into park runs the lever through reverse on the way, and openpilot acts on that the instant it sees it, " +
     "so a take control alert fires while steering is still on. This makes it wait a tenth of a second first. " +
@@ -163,6 +173,20 @@ class TogglesLayout(Widget):
         lambda: tr("Steer With The Cruise Switch"),
         DESCRIPTIONS["MadsMainSwitch"],
         "chffr_wheel.png",
+        # changes what the panda will allow, so it can only be applied at car init
+        True,
+      ),
+      "AutoVehicleHold": (
+        lambda: tr("Turn On Brake Hold"),
+        DESCRIPTIONS["AutoVehicleHold"],
+        "warning.png",
+        # changes what the panda will allow, so it can only be applied at car init
+        True,
+      ),
+      "DisableStopStart": (
+        lambda: tr("Turn Off Auto Engine Stop"),
+        DESCRIPTIONS["DisableStopStart"],
+        "warning.png",
         # changes what the panda will allow, so it can only be applied at car init
         True,
       ),

@@ -18,7 +18,8 @@ from opendbc.car.carlog import carlog
 from opendbc.car.fw_versions import ObdCallback
 from opendbc.car.car_helpers import get_car, interfaces
 from opendbc.car.interfaces import CarInterfaceBase, RadarInterfaceBase
-from opendbc.car.subaru.values import enable_mads as subaru_enable_mads, enable_mads_main as subaru_enable_mads_main
+from opendbc.car.subaru.values import enable_mads as subaru_enable_mads, enable_mads_main as subaru_enable_mads_main, \
+                                      enable_avh as subaru_enable_avh, enable_stop_start_off as subaru_enable_stop_start_off
 from openpilot.selfdrive.pandad import can_capnp_to_list, can_list_to_can_capnp
 from openpilot.selfdrive.car.cruise import VCruiseHelper
 
@@ -126,6 +127,15 @@ class Car:
       # MADS anyway, so it is only ever set alongside it
       if self.params.get_bool("MadsMainSwitch"):
         subaru_enable_mads_main(self.CP)
+
+    # comfort settings the car forgets every ignition cycle. these also change what the panda
+    # will allow, so they land here at car init alongside MADS rather than at runtime. neither
+    # rides on MADS: they are about the car's own buttons, not about steering.
+    if not self.CP.passive and self.CP.brand == 'subaru':
+      if self.params.get_bool("AutoVehicleHold"):
+        subaru_enable_avh(self.CP)
+      if self.params.get_bool("DisableStopStart"):
+        subaru_enable_stop_start_off(self.CP)
 
     if self.CP.secOcRequired:
       # Copy user key if available
