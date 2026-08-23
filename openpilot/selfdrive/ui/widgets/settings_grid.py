@@ -73,9 +73,9 @@ INFO_TITLE_GAP = 32
 INFO_HINT_GAP = 28
 INFO_HINT_FONT_SIZE = 28
 
-# the tabs that pick which grid a page shows. they ride on a title row, so they are shorter than
-# a dropdown button and lean on the row's own height for the rest of the tap target
-TAB_HEIGHT = 56
+# the tabs that pick which grid a page shows. same height as a dropdown button: they are the
+# first thing aimed at on the page, so they should not be the smallest thing on it
+TAB_HEIGHT = 78
 TAB_PAD = 30
 TAB_GAP = 10
 

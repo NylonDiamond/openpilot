@@ -34,7 +34,9 @@ SETTINGS_TAB_LABELS = ("DRIVING", "UI")
 # still a fair tap target, and stop growing before the page reads as mostly empty.
 SETTINGS_ROW_MIN_HEIGHT = 92
 SETTINGS_ROW_MAX_HEIGHT = 150
-COLUMN_TITLE_HEIGHT = 66
+# tall enough to hold the tabs with air either side, which is also what sets the gap down to the
+# first row of settings
+COLUMN_TITLE_HEIGHT = 106
 COLUMN_TITLE_FONT_SIZE = 44
 
 
