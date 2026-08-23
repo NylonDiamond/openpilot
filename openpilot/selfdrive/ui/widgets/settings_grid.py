@@ -128,17 +128,34 @@ CHOICE_SETTINGS = (
   ("LanePosition", "Lane position", LANE_POSITION_OFFSETS_CM, ("FL", "L", "C", "R", "FR")),
 )
 
-# what changes how the car drives. this is the set worth having on the home screen, where the
-# question is what to try on the next drive rather than what to change during one
-DRIVING_PARAMS = tuple(s[0] for s in CHOICE_SETTINGS) + ("MadsEnabled", "MadsMainSwitch", "AutoVehicleHold",
-                                                         "DisableStopStart", "ReverseGearDebounce")
+# the three tabs. the order inside each one is the order they fill the columns in, so settings
+# that only make sense read together are kept together rather than split across a column break.
 
-# and what only changes how the screen looks. ShowDebugPanel is deliberately not here: it is the
+# what changes how the car is steered and what it warns you about while driving
+DRIVING_PARAMS = (
+  "MadsEnabled", "MadsMainSwitch", "IsLdwEnabled",
+  # the pause speed decides whether the other two do anything, so all three stay in one column
+  "AutoLaneChangeTimer", "BlinkerPauseSpeed", "BlinkerPauseDelay",
+  "LanePosition", "AlwaysOnDM", "DisengageOnAccelerator",
+)
+
+# what only changes what is on the screen. ShowDebugPanel is deliberately not here: it is the
 # switch for the driving overlay, and putting it inside that overlay is a door that locks behind
 # you. It stays in the settings menu, which is reachable either way.
-DISPLAY_PARAMS = tuple(s[0] for s in BOOL_SETTINGS if s[0] not in DRIVING_PARAMS)
+DISPLAY_PARAMS = (
+  "BrightnessLevel", "ShowTurnSignals", "ShowStockBrake", "ShowBlindSpot",
+  "ShowSteeringOnly", "ShowLeadIndicator", "EngagementPathColor", "HideExperimentalButton",
+  "WideCameraLowSpeed", "ShowHomeStatus",
+)
 
-ALL_PARAMS = DRIVING_PARAMS + DISPLAY_PARAMS
+# what is left: the car's own comfort features, and the odds and ends that fit nowhere else
+OTHER_PARAMS = (
+  "AutoVehicleHold", "DisableStopStart",
+  "ReverseGearDebounce", "CurveAdvisory",
+  "IsMetric",
+)
+
+ALL_PARAMS = DRIVING_PARAMS + DISPLAY_PARAMS + OTHER_PARAMS
 
 
 class RowToggle(Toggle):
