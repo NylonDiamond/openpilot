@@ -19,10 +19,11 @@ SPACING = 25
 VERSION_FONT_SIZE = 48
 REFRESH_INTERVAL = 10.0
 
-# two columns, which is what the compact controls bought: a choice is one button now rather than
-# a row of pills, so a setting no longer needs the width of the page to itself. the page is wide
-# and short, so splitting sideways is where the room is.
-SETTINGS_COLUMNS = 2
+# three columns, which is what the compact controls bought: a choice is one button now rather
+# than a row of pills, so a setting no longer needs the width of the page to itself. the page is
+# wide and short, so splitting sideways is where the room is, and the rows left over are room
+# for settings that do not exist yet.
+SETTINGS_COLUMNS = 3
 SETTINGS_ROWS = math.ceil(len(DRIVING_PARAMS) / SETTINGS_COLUMNS)
 # the row height is worked out from what the page actually has, rather than fixed. a fixed one
 # is how the switch row ended up off the bottom of the screen the moment a setting was added:
