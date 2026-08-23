@@ -5,19 +5,21 @@ a live camera: a button to open it, a scrim so the road does not read through it
 handling that keeps a tap on the panel from reaching the road view underneath.
 """
 
+import math
 from collections.abc import Callable
 
 import pyray as rl
 
 from openpilot.selfdrive.ui.ui_state import ui_state
-from openpilot.selfdrive.ui.widgets.settings_grid import ALL_PARAMS, DRIVING_PARAMS, SettingsGrid
+from openpilot.selfdrive.ui.widgets.settings_grid import ALL_PARAMS, SettingsGrid
 from openpilot.system.ui.lib.application import FontWeight, MousePos, gui_app
 from openpilot.system.ui.lib.text_measure import measure_text_cached
 from openpilot.system.ui.widgets import Widget
 
-# the driving settings fill the left column, so the display ones start the right column and its
-# last slot falls free for the button to sit in
-ROWS_PER_COLUMN = len(DRIVING_PARAMS)
+# the panel is full width and the screen is short, so settings spread sideways and the row count
+# follows. the +1 is the slot the button sits in, which has to stay free.
+PANEL_COLUMNS = 3
+ROWS_PER_COLUMN = math.ceil((len(ALL_PARAMS) + 1) / PANEL_COLUMNS)
 HEADER_HEIGHT = 66
 PANEL_PADDING = 28
 PANEL_INSET = 30
@@ -91,8 +93,10 @@ class DebugPanel(Widget):
     # picks a value must not also reach the button and shut the panel
     self._button.set_touch_valid_callback(lambda: not self._grid.is_popup_open)
 
-    assert self._grid.columns == 2, "the panel is laid out for two columns"
-    assert len(ALL_PARAMS) < 2 * ROWS_PER_COLUMN, "the last slot has to stay free for the button"
+    # the button parks in the bottom right slot, so the grid has to leave that one empty. the
+    # column count follows from how many settings there are, and the panel is full width, so
+    # a new setting spills into another column rather than off the bottom of the screen
+    assert len(ALL_PARAMS) < self._grid.columns * ROWS_PER_COLUMN, "the last slot has to stay free for the button"
 
   @property
   def is_open(self) -> bool:

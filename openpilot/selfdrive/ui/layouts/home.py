@@ -4,7 +4,7 @@ import pyray as rl
 from enum import IntEnum
 from openpilot.common.params import Params
 from openpilot.selfdrive.ui.widgets.offroad_alerts import UpdateAlert, OffroadAlert
-from openpilot.selfdrive.ui.widgets.settings_grid import DRIVING_PARAMS, SettingsGrid
+from openpilot.selfdrive.ui.widgets.settings_grid import DISPLAY_PARAMS, DRIVING_PARAMS, SettingsGrid, SettingsTabs
 from openpilot.selfdrive.ui.widgets.status_bar import StatusBar
 from openpilot.selfdrive.ui.ui_state import ui_state
 from openpilot.system.ui.lib.text_measure import measure_text_cached
@@ -25,7 +25,9 @@ REFRESH_INTERVAL = 10.0
 # wide and short, so splitting sideways is where the room is, and the rows left over are room
 # for settings that do not exist yet.
 SETTINGS_COLUMNS = 3
-SETTINGS_ROWS = math.ceil(len(DRIVING_PARAMS) / SETTINGS_COLUMNS)
+DRIVING_ROWS = math.ceil(len(DRIVING_PARAMS) / SETTINGS_COLUMNS)
+DISPLAY_ROWS = math.ceil(len(DISPLAY_PARAMS) / SETTINGS_COLUMNS)
+SETTINGS_TAB_LABELS = ("DRIVING", "UI")
 # the row height is worked out from what the page actually has, rather than fixed. a fixed one
 # is how the switch row ended up off the bottom of the screen the moment a setting was added:
 # nothing checked that the rows still fit. rows shrink instead now, down to a floor that is
@@ -67,12 +69,30 @@ class HomeLayout(Widget):
     self.update_notif_rect = rl.Rectangle(0, 0, 200, HEADER_HEIGHT - 10)
     self.alert_notif_rect = rl.Rectangle(0, 0, 220, HEADER_HEIGHT - 10)
 
-    # the home screen is where a drive gets set up, so it carries what changes how the car
-    # drives. the rest of the settings stay one tap away in the overlay and in the menu.
-    self._settings_grid = self._child(SettingsGrid(DRIVING_PARAMS, SETTINGS_ROWS))
+    # the home screen is where a drive gets set up, so what changes how the car drives leads.
+    # what only changes how the screen looks sits behind the second tab rather than in the menu,
+    # because a display setting is judged by looking at the screen it changes.
+    self._settings_grids = (
+      self._child(SettingsGrid(DRIVING_PARAMS, DRIVING_ROWS)),
+      self._child(SettingsGrid(DISPLAY_PARAMS, DISPLAY_ROWS)),
+    )
+    self._settings_tabs = self._child(SettingsTabs(SETTINGS_TAB_LABELS, self._select_settings_tab))
+    # an open option list draws over the title row, so the tap that picks a value must not also
+    # land on a tab and swap the grid out from under it
+    self._settings_tabs.set_touch_valid_callback(lambda: not self._settings_grid.is_popup_open)
     # the readiness summary shares the settings title row, so it costs no height of its own
     self._status_bar = self._child(StatusBar())
     self._setup_callbacks()
+
+  @property
+  def _settings_grid(self) -> SettingsGrid:
+    return self._settings_grids[self._settings_tabs.selected]
+
+  def _select_settings_tab(self, _: int) -> None:
+    # the grid going away must not leave its option list up, or the list keeps swallowing touch
+    for grid in self._settings_grids:
+      grid.close_popup()
+    self._settings_grid.refresh()
 
   def show_event(self):
     super().show_event()
@@ -179,16 +199,21 @@ class HomeLayout(Widget):
     gui_label(rl.Rectangle(rect.x, rect.y, rect.width, COLUMN_TITLE_HEIGHT), title,
               COLUMN_TITLE_FONT_SIZE, font_weight=FontWeight.BOLD)
 
-    # the readiness summary rides beside the title on the same line, and drops its own tail when
-    # what the title leaves is not enough for every fact
-    if ui_state.show_home_status:
-      status_x = rect.x + measure_text_cached(gui_app.font(FontWeight.BOLD), title, COLUMN_TITLE_FONT_SIZE).x + SPACING * 2
-      self._status_bar.render(rl.Rectangle(status_x, rect.y, max(0.0, rect.x + rect.width - status_x), COLUMN_TITLE_HEIGHT))
+    # the tabs and the readiness summary both ride the title line, so neither costs any height.
+    # the tabs go first because they are the thing that gets aimed at, and the summary takes
+    # whatever is left over and drops its own tail when that is not enough for every fact
+    next_x = rect.x + measure_text_cached(gui_app.font(FontWeight.BOLD), title, COLUMN_TITLE_FONT_SIZE).x + SPACING * 2
+    self._settings_tabs.render(rl.Rectangle(next_x, rect.y, self._settings_tabs.natural_width, COLUMN_TITLE_HEIGHT))
+    next_x += self._settings_tabs.natural_width + SPACING * 2
 
+    if ui_state.show_home_status:
+      self._status_bar.render(rl.Rectangle(next_x, rect.y, max(0.0, rect.x + rect.width - next_x), COLUMN_TITLE_HEIGHT))
+
+    grid = self._settings_grid
     grid_rect = rl.Rectangle(rect.x, rect.y + COLUMN_TITLE_HEIGHT, rect.width, rect.height - COLUMN_TITLE_HEIGHT)
-    row_height = min(SETTINGS_ROW_MAX_HEIGHT, max(SETTINGS_ROW_MIN_HEIGHT, grid_rect.height / SETTINGS_ROWS))
-    self._settings_grid.set_row_height(row_height)
-    self._settings_grid.render(grid_rect)
+    row_height = min(SETTINGS_ROW_MAX_HEIGHT, max(SETTINGS_ROW_MIN_HEIGHT, grid_rect.height / grid.rows))
+    grid.set_row_height(row_height)
+    grid.render(grid_rect)
 
   def _render_update_view(self):
     self.update_alert.render(self.content_rect)
