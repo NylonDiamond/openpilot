@@ -20,6 +20,14 @@ PARAM_UPDATE_TIME = 1 / 5.0
 # screen brightness options, 0 selects the automatic behavior
 BRIGHTNESS_LEVELS = (0, 25, 50, 75, 100)
 
+# how fast the backlight follows the light sensor. slow on purpose: it is tracking the sun, and a
+# backlight that reacted to every underpass would be worse than one that lagged one.
+BACKLIGHT_RC = 10.0
+
+# the onroad dim borrows the same filter and cannot wait ten seconds, so it swaps this in on the
+# way down. it snaps rather than ramps on the way back up.
+ONROAD_DIM_RC = 1.5
+
 
 class UIStatus(Enum):
   DISENGAGED = "disengaged"
@@ -106,6 +114,13 @@ class UIState:
     self.show_stock_brake: bool = self.params.get_bool("ShowStockBrake")
     self.show_blind_spot: bool = self.params.get_bool("ShowBlindSpot")
     self.show_steering_only: bool = self.params.get_bool("ShowSteeringOnly")
+    # turn the wheel button in the corner with the real steering wheel
+    self.rotate_wheel_icon: bool = self.params.get_bool("RotateWheelIcon")
+    # the model's confidence in the scene, as a ball on a track
+    self.show_confidence_ball: bool = self.params.get_bool("ShowConfidenceBall")
+    # how long the driving screen may go untouched before it dims, and how far down
+    self.onroad_dim_timer: int = self.params.get("OnroadDimTimer", return_default=True)
+    self.onroad_dim_level: int = self.params.get("OnroadDimLevel", return_default=True)
     # the readiness summary on the home screen
     self.show_home_status: bool = self.params.get_bool("ShowHomeStatus")
     self.is_body: bool | None = False
@@ -238,6 +253,10 @@ class UIState:
     self.show_stock_brake = self.params.get_bool("ShowStockBrake")
     self.show_blind_spot = self.params.get_bool("ShowBlindSpot")
     self.show_steering_only = self.params.get_bool("ShowSteeringOnly")
+    self.rotate_wheel_icon = self.params.get_bool("RotateWheelIcon")
+    self.show_confidence_ball = self.params.get_bool("ShowConfidenceBall")
+    self.onroad_dim_timer = self.params.get("OnroadDimTimer", return_default=True)
+    self.onroad_dim_level = self.params.get("OnroadDimLevel", return_default=True)
     self.show_home_status = self.params.get_bool("ShowHomeStatus")
     # keep usbgpu UI active until offroad transition when gpu disappears
     self.usbgpu = self.sm["deviceState"].chestnutPresent or (self.usbgpu and self.started)
@@ -260,10 +279,15 @@ class Device:
     self._offroad_brightness: int = BACKLIGHT_OFFROAD
     self._brightness_level: int = self._params.get("BrightnessLevel", return_default=True)
     self._last_brightness: int = 0
-    self._brightness_filter = FirstOrderFilter(BACKLIGHT_OFFROAD, 10.00, 1 / gui_app.target_fps)
+    self._brightness_filter = FirstOrderFilter(BACKLIGHT_OFFROAD, BACKLIGHT_RC, 1 / gui_app.target_fps)
     self._brightness_thread: threading.Thread | None = None
     self._brightness_event = threading.Event()
     self._brightness_target: int = 0
+
+    # the last moment the driving screen had a reason to be looked at
+    self._onroad_active_time: float = 0.0
+    self._prev_ui_status: UIStatus | None = None
+    self._was_dimmed: bool = False
 
   @property
   def awake(self) -> bool:
@@ -295,6 +319,7 @@ class Device:
     if self._interaction_time <= 0:
       self._reset_interactive_timeout()
 
+    self._update_onroad_activity()
     self._update_brightness()
     self._update_wakefulness()
 
@@ -320,9 +345,35 @@ class Device:
     self._brightness_level = level
     self._brightness_filter.x = self._target_brightness()  # skip the ramp so the new setting is visible right away
 
+  def _update_onroad_activity(self) -> None:
+    """Track the last thing that gave the driving screen a reason to be bright."""
+    status = ui_state.status
+    status_changed = self._prev_ui_status is not None and status != self._prev_ui_status
+    self._prev_ui_status = status
+
+    # an alert is the screen asking to be looked at, so it counts the same as a touch. so does
+    # openpilot handing over or taking back, which is the other moment the screen is worth reading.
+    alerting = ui_state.started and ui_state.sm['selfdriveState'].alertSize != 0
+    touched = any(ev.left_down for ev in gui_app.mouse_events)
+
+    if not ui_state.started or touched or alerting or status_changed:
+      self._onroad_active_time = time.monotonic()
+
+  def _onroad_dim_level(self) -> float | None:
+    """The brightness to hold once the driving screen has been left alone, or None to leave it."""
+    timer = ui_state.onroad_dim_timer
+    if not timer or not ui_state.started:
+      return None
+    if time.monotonic() < self._onroad_active_time + timer:
+      return None
+    return float(ui_state.onroad_dim_level)
+
   def _target_brightness(self) -> float:
+    dimmed = self._onroad_dim_level()
+
     if self._brightness_level:
-      return float(self._brightness_level)
+      # a fixed brightness is a ceiling here, not an override. dimming may only ever darken.
+      return float(self._brightness_level) if dimmed is None else min(float(self._brightness_level), dimmed)
 
     clipped_brightness = float(self._offroad_brightness)
 
@@ -337,9 +388,19 @@ class Device:
 
       clipped_brightness = float(np.interp(clipped_brightness, [0, 1], [30, 100]))
 
-    return clipped_brightness
+    return clipped_brightness if dimmed is None else min(clipped_brightness, dimmed)
 
   def _update_brightness(self):
+    dimmed = self._onroad_dim_level() is not None
+    if dimmed != self._was_dimmed:
+      if dimmed:
+        self._brightness_filter.update_alpha(ONROAD_DIM_RC)
+      else:
+        # a driver reaching for the screen is not going to wait out a fade
+        self._brightness_filter.update_alpha(BACKLIGHT_RC)
+        self._brightness_filter.x = self._target_brightness()
+      self._was_dimmed = dimmed
+
     brightness = round(self._brightness_filter.update(self._target_brightness()))
     if not self._awake:
       brightness = 0

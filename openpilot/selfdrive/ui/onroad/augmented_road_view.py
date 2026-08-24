@@ -6,6 +6,7 @@ from openpilot.selfdrive.ui import UI_BORDER_SIZE
 from openpilot.selfdrive.ui.ui_state import ui_state, UIStatus
 from openpilot.selfdrive.ui.onroad.alert_renderer import AlertRenderer
 from openpilot.selfdrive.ui.onroad.car_indicators import CarIndicators
+from openpilot.selfdrive.ui.onroad.confidence_ball import ConfidenceBall
 from openpilot.selfdrive.ui.onroad.debug_panel import DebugPanel
 from openpilot.selfdrive.ui.onroad.driver_state import DriverStateRenderer
 from openpilot.selfdrive.ui.onroad.hud_renderer import HudRenderer
@@ -50,6 +51,7 @@ class AugmentedRoadView(CameraView):
     self.alert_renderer = AlertRenderer()
     self.driver_state_renderer = DriverStateRenderer()
     self.car_indicators = CarIndicators()
+    self.confidence_ball = ConfidenceBall()
     self.debug_panel = DebugPanel()
 
   def _render(self, rect):
@@ -93,6 +95,8 @@ class AugmentedRoadView(CameraView):
     # Custom UI extension point - add custom overlays here
     # Use self._content_rect for positioning within camera bounds
     self.car_indicators.render(self._content_rect)
+    if ui_state.show_confidence_ball:
+      self.confidence_ball.render(self._content_rect)
     # last, so its overlay sits on top of everything else on the driving screen
     self.debug_panel.render(self._content_rect)
 

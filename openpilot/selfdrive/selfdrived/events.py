@@ -537,6 +537,18 @@ EVENTS: dict[int, dict[str, Alert | AlertCallbackType]] = {
       Priority.LOW, VisualAlert.none, AudibleAlert.none, 1.),
   },
 
+  # PERMANENT for the same reason as the curve advisory: a queue moving off is worth saying
+  # whether or not openpilot is steering. this one does chime, unlike the curve advisory, because
+  # it fires a handful of times a drive rather than continuously, and it is telling the driver
+  # about something they are by definition not looking at.
+  EventName.leadDeparting: {
+    ET.PERMANENT: Alert(
+      "Lead Vehicle Departing",
+      "",
+      AlertStatus.normal, AlertSize.small,
+      Priority.LOW, VisualAlert.none, AudibleAlert.prompt, 3.),
+  },
+
   # ********** events only containing alerts that display while engaged **********
 
   EventName.steerTempUnavailableSilent: {

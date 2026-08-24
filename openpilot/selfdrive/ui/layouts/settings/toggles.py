@@ -26,6 +26,12 @@ BLINKER_PAUSE_SPEED_LABELS = ("Off", "20 mph", "40 mph", "Any")
 # acceleration thresholds in curve_advisory.py rather than meaning anything on their own
 CURVE_ADVISORY_LEVELS = (0, 1, 2, 3)
 
+# seconds the driving screen goes untouched before it dims, 0 keeps it at full brightness
+ONROAD_DIM_TIMERS = (0, 30, 60, 180)
+
+# the brightness it dims to, as a percentage. 0 is the screen off entirely
+ONROAD_DIM_LEVELS = (0, 10, 25, 50)
+
 # onroad display settings that reclaim parts of the UI the stock build only uses to report
 # longitudinal state. nothing for them to do on a car openpilot drives end to end.
 LATERAL_ONLY_DISPLAY_TOGGLES = ("ShowLeadIndicator", "EngagementPathColor", "HideExperimentalButton")
@@ -116,6 +122,36 @@ DESCRIPTIONS = {
     "Remove the steering wheel button from the top right of the driving screen. " +
     "Experimental mode needs openpilot longitudinal control, which this car does not have, " +
     "so the button cannot do anything and only blocks taps in that corner."
+  ),
+  "RotateWheelIcon": tr_noop(
+    "Turn the steering wheel button in the top right corner with the car's real steering wheel. " +
+    "It is the only thing on the driving screen that shows what the wheel is doing, which is worth a glance " +
+    "when openpilot is steering and your hands are resting rather than holding. " +
+    "Hiding the button turns this off with it."
+  ),
+  "LeadDepartAlert": tr_noop(
+    "Chime once when the car you are stopped behind starts to move. " +
+    "EyeSight creeps after a lead by itself, but only while its cruise is engaged and holding, and it says nothing at all when it is not. " +
+    "The lead comes from the comma's own camera, since this car has no radar, so it needs a clear view of the car ahead. " +
+    "It waits until both of you have been still for a moment, then fires once as the gap opens."
+  ),
+  "OnroadDimTimer": tr_noop(
+    "How long the driving screen may go untouched before it dims itself. " +
+    "The screen is bright enough at night to light the cabin, and nothing on it needs reading on a straight road. " +
+    "It comes back to full brightness the moment you touch it, and by itself for any alert " +
+    "and whenever openpilot starts or stops steering, so nothing worth seeing is missed."
+  ),
+  "OnroadDimLevel": tr_noop(
+    "How far down the driving screen dims once it has been left alone. Dark switches the backlight off entirely. " +
+    "This only ever darkens the screen, so a fixed brightness setting is still the brightest it will go. " +
+    "Requires a dim delay to be set."
+  ),
+  "ShowConfidenceBall": tr_noop(
+    "A ball on the right of the driving screen that rides up a track as the driving model gets surer " +
+    "of what it is looking at, green when it is confident and red when it is not. " +
+    "It is the model's own read on whether it is about to hand the car back, so a ball sinking into " +
+    "the red is worth a look at the road before openpilot asks for one. " +
+    "It says nothing about the stock cruise, which is steering's only company on this car."
   ),
   "WideCameraLowSpeed": tr_noop(
     "Switch the driving screen to the wide angle camera below 22 mph (36 km/h), which shows far more of a junction " +
