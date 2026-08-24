@@ -15,7 +15,8 @@ from openpilot.common.params import Params
 from openpilot.selfdrive.controls.lib.blinker_pause import ANY_SPEED_MPH, BLINKER_PAUSE_SPEEDS_MPH
 from openpilot.selfdrive.controls.lib.lane_position import LANE_POSITION_OFFSETS_CM
 from openpilot.selfdrive.ui.layouts.settings.toggles import (AUTO_LANE_CHANGE_TIMERS, BLINKER_PAUSE_DELAYS,
-                                                             CURVE_ADVISORY_LEVELS, DESCRIPTIONS)
+                                                             CURVE_ADVISORY_LEVELS, DESCRIPTIONS,
+                                                             ONROAD_DIM_LEVELS, ONROAD_DIM_TIMERS)
 from openpilot.selfdrive.ui.ui_state import BRIGHTNESS_LEVELS, device, ui_state
 from openpilot.system.ui.lib.application import FontWeight, MousePos, gui_app
 from openpilot.system.ui.lib.multilang import tr
@@ -102,6 +103,7 @@ BOOL_SETTINGS = (
   ("DisableStopStart", "Kill auto stop", True),
   ("ReverseGearDebounce", "Ignore reverse", False),
   ("IsLdwEnabled", "Lane departure warn", False),
+  ("LeadDepartAlert", "Lead departing", False),
   ("ShowLeadIndicator", "Lead marker", False),
   ("EngagementPathColor", "Path color by steer", False),
   ("HideExperimentalButton", "Hide exp button", False),
@@ -110,6 +112,8 @@ BOOL_SETTINGS = (
   ("ShowStockBrake", "Brake bar", False),
   ("ShowBlindSpot", "Blind spot bars", False),
   ("ShowSteeringOnly", "Steering badge", False),
+  ("RotateWheelIcon", "Spin wheel icon", False),
+  ("ShowConfidenceBall", "Confidence ball", False),
   ("ShowHomeStatus", "Home status", False),
   ("AlwaysOnDM", "Always-on DM", False),
   ("DisengageOnAccelerator", "Disengage on gas", False),
@@ -126,6 +130,8 @@ CHOICE_SETTINGS = (
   ("BlinkerPauseDelay", "Resume delay", BLINKER_PAUSE_DELAYS, ("Now", "1s", "2s", "3s")),
   ("CurveAdvisory", "Curve warning", CURVE_ADVISORY_LEVELS, ("Off", "Late", "Norm", "Early")),
   ("LanePosition", "Lane position", LANE_POSITION_OFFSETS_CM, ("FL", "L", "C", "R", "FR")),
+  ("OnroadDimTimer", "Dim screen", ONROAD_DIM_TIMERS, ("Off", "30s", "1m", "3m")),
+  ("OnroadDimLevel", "Dim to", ONROAD_DIM_LEVELS, ("Dark", "10", "25", "50")),
 )
 
 # the three tabs. the order inside each one is the order they fill the columns in, so settings
@@ -133,7 +139,7 @@ CHOICE_SETTINGS = (
 
 # what changes how the car is steered and what it warns you about while driving
 DRIVING_PARAMS = (
-  "MadsEnabled", "MadsMainSwitch", "IsLdwEnabled",
+  "MadsEnabled", "MadsMainSwitch", "IsLdwEnabled", "LeadDepartAlert",
   # the pause speed decides whether the other two do anything, so all three stay in one column
   "AutoLaneChangeTimer", "BlinkerPauseSpeed", "BlinkerPauseDelay",
   "LanePosition", "AlwaysOnDM", "DisengageOnAccelerator",
@@ -143,9 +149,13 @@ DRIVING_PARAMS = (
 # switch for the driving overlay, and putting it inside that overlay is a door that locks behind
 # you. It stays in the settings menu, which is reachable either way.
 DISPLAY_PARAMS = (
-  "BrightnessLevel", "ShowTurnSignals", "ShowStockBrake", "ShowBlindSpot",
-  "ShowSteeringOnly", "ShowLeadIndicator", "EngagementPathColor", "HideExperimentalButton",
-  "WideCameraLowSpeed", "ShowHomeStatus",
+  # the three that decide how bright the screen is, kept together
+  "BrightnessLevel", "OnroadDimTimer", "OnroadDimLevel",
+  "ShowTurnSignals", "ShowStockBrake", "ShowBlindSpot",
+  "ShowSteeringOnly", "ShowLeadIndicator", "EngagementPathColor",
+  # the two that decide what the corner button does, kept together
+  "HideExperimentalButton", "RotateWheelIcon",
+  "ShowConfidenceBall", "WideCameraLowSpeed", "ShowHomeStatus",
 )
 
 # what is left: the car's own comfort features, and the odds and ends that fit nowhere else
@@ -619,6 +629,11 @@ class SettingsGrid(Widget):
         self._dropdowns["BlinkerPauseDelay"].set_enabled(pause_speed > 0)
       if "AutoLaneChangeTimer" in self._dropdowns:
         self._dropdowns["AutoLaneChangeTimer"].set_enabled(pause_speed < ANY_SPEED_MPH)
+
+    # how far to dim says nothing with dimming off
+    if "OnroadDimTimer" in self._dropdowns and "OnroadDimLevel" in self._dropdowns:
+      dim_timer = ONROAD_DIM_TIMERS[self._dropdowns["OnroadDimTimer"].selected]
+      self._dropdowns["OnroadDimLevel"].set_enabled(dim_timer > 0)
 
     # a control that goes disabled under an open list would never get the tap that closes it
     if self._open_param is not None and not self._dropdowns[self._open_param].enabled:
